@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = env("DATABASE_PROVIDER") // e.g. "postgresql" | "mysql" | "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Family {
+  id        String    @id @default(cuid())
+  name      String
+  members   Member[]
+  events    Event[]
+  tokens    OAuthToken[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  family    Family   @relation(fields: [familyId], references: [id])
+  familyId  String
+  role      Role
+  name      String
+  grade     String?
+  events    EventParticipant[]
+  tasks     Task[]   @relation("TaskAssignee")
+  notes     EventNote[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  parent
+  child
+  admin
+}
+
+model Event {
+  id            String             @id @default(cuid())
+  family        Family             @relation(fields: [familyId], references: [id])
+  familyId      String
+  title         String
+  startAt       DateTime
+  endAt         DateTime
+  type          EventType
+  importance    Importance
+  location      String?
+  note          String?
+  createdBy     String?
+  participants  EventParticipant[]
+  tasks         Task[]
+  notes         EventNote[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([familyId, startAt, endAt])
+  @@check(endAt > startAt)
+}
+
+enum EventType {
+  school
+  cram
+  lesson
+  exam
+  other
+}
+
+enum Importance {
+  must
+  should
+  optional
+}
+
+model EventParticipant {
+  event     Event  @relation(fields: [eventId], references: [id])
+  eventId   String
+  member    Member @relation(fields: [memberId], references: [id])
+  memberId  String
+
+  @@id([eventId, memberId])
+}
+
+model Task {
+  id          String      @id @default(cuid())
+  event       Event       @relation(fields: [eventId], references: [id])
+  eventId     String
+  title       String
+  dueDate     DateTime?
+  status      TaskStatus  @default(not_started)
+  assignee    Member?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assigneeId  String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+enum TaskStatus {
+  not_started
+  in_progress
+  done
+}
+
+model EventNote {
+  id        String   @id @default(cuid())
+  event     Event    @relation(fields: [eventId], references: [id])
+  eventId   String
+  content   String
+  createdBy String?
+  createdAt DateTime @default(now())
+}
+
+model ExternalEvent {
+  id           String   @id @default(cuid())
+  family       Family   @relation(fields: [familyId], references: [id])
+  familyId     String
+  source       String   @default("google")
+  externalId   String
+  title        String
+  startAt      DateTime
+  endAt        DateTime
+  location     String?
+  organizer    String?
+  lastSyncedAt DateTime @default(now())
+
+  @@index([familyId, source, externalId])
+}
+
+model OAuthToken {
+  id           String   @id @default(cuid())
+  family       Family   @relation(fields: [familyId], references: [id])
+  familyId     String
+  provider     String   @default("google")
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
