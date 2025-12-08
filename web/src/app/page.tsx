@@ -42,6 +42,13 @@ type ExternalEvent = {
   organizer?: string | null;
 };
 
+type EventNote = {
+  id: string;
+  content: string;
+  createdBy?: string | null;
+  createdAt: string;
+};
+
 const importanceLabel: Record<Importance, string> = {
   must: "Must",
   should: "Should",
@@ -60,6 +67,9 @@ export default function Home() {
   const defaultFamily = process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "";
   const [familyId, setFamilyId] = useState<string>(defaultFamily);
   const [message, setMessage] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"week" | "month">("week");
+  const [filterMember, setFilterMember] = useState<string>("all");
+  const [filterType, setFilterType] = useState<"all" | EventType>("all");
 
   // Form state
   const [newEvent, setNewEvent] = useState({
@@ -97,14 +107,25 @@ export default function Home() {
     isLoading: loadingExternal,
   } = useSWR<ExternalEvent[]>(familyId ? "/api/google/events" : null, fetcher);
 
+  const filteredEvents = useMemo(() => {
+    if (!events) return [];
+    return events.filter((ev) => {
+      const memberOk =
+        filterMember === "all" ||
+        ev.participants.some((p) => p.memberId === filterMember);
+      const typeOk = filterType === "all" || ev.type === filterType;
+      return memberOk && typeOk;
+    });
+  }, [events, filterMember, filterType]);
+
   const conflictIds = useMemo(() => {
-    const mapped = (events ?? []).map((e) => ({
+    const mapped = filteredEvents.map((e) => ({
       ...e,
       startAt: new Date(e.startAt),
       endAt: new Date(e.endAt),
     }));
     return detectConflicts(mapped as any);
-  }, [events]);
+  }, [filteredEvents]);
 
   async function handleCreateEvent() {
     if (!familyId) {
@@ -149,6 +170,68 @@ export default function Home() {
           "x-family-id": familyId,
         },
         body: JSON.stringify({ title }),
+      });
+      await mutateEvents();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleUpdateTask(eventId: string, task: Task, updates: Partial<Task>) {
+    if (!familyId) return;
+    try {
+      await fetch(`/api/events/${eventId}/tasks`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-family-id": familyId,
+        },
+        body: JSON.stringify({ ...task, ...updates }),
+      });
+      await mutateEvents();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleDeleteTask(eventId: string, taskId: string) {
+    if (!familyId) return;
+    try {
+      await fetch(`/api/events/${eventId}/tasks`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-family-id": familyId,
+        },
+        body: JSON.stringify({ taskId }),
+      });
+      await mutateEvents();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleAddMember(name: string, role: "parent" | "child", grade?: string) {
+    if (!familyId || !name) return;
+    try {
+      await fetch("/api/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-family-id": familyId },
+        body: JSON.stringify({ name, role, grade }),
+      });
+      await mutateMembers();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleAddNote(eventId: string, content: string) {
+    if (!familyId || !content) return;
+    try {
+      await fetch(`/api/events/${eventId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-family-id": familyId },
+        body: JSON.stringify({ content }),
       });
       await mutateEvents();
     } catch (e) {
@@ -240,7 +323,7 @@ export default function Home() {
             <div className="col-span-1 sm:col-span-2">
               <p className="text-xs text-zinc-600">参加者を選択</p>
               <div className="flex flex-wrap gap-2">
-                {members.map((m) => {
+                {(members ?? []).map((m) => {
                   const checked = newEvent.participantIds.includes(m.id);
                   return (
                     <label key={m.id} className="flex items-center gap-1 text-sm">
@@ -279,6 +362,12 @@ export default function Home() {
           >
             {loadingExternal ? "取得中..." : "外部イベント再取得"}
           </button>
+          <a
+            className="mt-2 inline-block text-xs text-blue-600 underline"
+            href={`/api/google/auth?familyId=${familyId}`}
+          >
+            Google連携を開始/再認可する
+          </a>
           <div className="mt-3 space-y-2 text-sm">
             {(externalEvents ?? []).map((ev) => (
               <div key={ev.id} className="rounded border border-zinc-200 p-2">
@@ -293,38 +382,89 @@ export default function Home() {
         </section>
 
         <section className="lg:col-span-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold">イベント一覧</h2>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-semibold">イベント一覧</h2>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <select
+                className="rounded border border-zinc-300 px-2 py-1"
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value as "week" | "month")}
+              >
+                <option value="week">週ビュー</option>
+                <option value="month">月ビュー</option>
+              </select>
+              <select
+                className="rounded border border-zinc-300 px-2 py-1"
+                value={filterMember}
+                onChange={(e) => setFilterMember(e.target.value)}
+              >
+                <option value="all">全メンバー</option>
+                {(members ?? []).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="rounded border border-zinc-300 px-2 py-1"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value as any)}
+              >
+                <option value="all">全タイプ</option>
+                {Object.values(EventType).map((t) => (
+                  <option key={t} value={t}>
+                    {typeLabel[t as EventType]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="mt-3 space-y-3">
-            {(events ?? []).map((ev) => {
-              const conflicted = conflictIds.has(ev.id);
-              return (
-                <div
-                  key={ev.id}
-                  className={`rounded border p-3 ${conflicted ? "border-red-400" : "border-zinc-200"}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold">
-                      {ev.title}{" "}
-                      <span className="text-xs text-zinc-500">
-                        {typeLabel[ev.type]} / {importanceLabel[ev.importance]}
-                      </span>
-                    </div>
-                    {conflicted && <span className="text-xs font-semibold text-red-600">⚠ conflict</span>}
-                  </div>
-                  <div className="text-xs text-zinc-600">
-                    {new Date(ev.startAt).toLocaleString()} - {new Date(ev.endAt).toLocaleString()}
-                  </div>
-                  <div className="text-xs text-zinc-700">
-                    参加者: {ev.participants.map((p) => p.member?.name ?? p.memberId).join(", ")}
-                  </div>
-                  <TaskList
-                    eventId={ev.id}
-                    tasks={ev.tasks}
-                    onAdd={(title) => handleAddTask(ev.id, title)}
-                  />
+            {groupEventsByDay(filteredEvents, viewMode).map(({ label, events: dayEvents }) => (
+              <div key={label}>
+                <div className="text-sm font-semibold text-zinc-700">{label}</div>
+                <div className="mt-2 space-y-2">
+                  {dayEvents.map((ev) => {
+                    const conflicted = conflictIds.has(ev.id);
+                    return (
+                      <div
+                        key={ev.id}
+                        className={`rounded border p-3 ${conflicted ? "border-red-400" : "border-zinc-200"}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold">
+                            {ev.title}{" "}
+                            <span className="text-xs text-zinc-500">
+                              {typeLabel[ev.type]} / {importanceLabel[ev.importance]}
+                            </span>
+                          </div>
+                          {conflicted && <span className="text-xs font-semibold text-red-600">⚠ conflict</span>}
+                        </div>
+                        <div className="text-xs text-zinc-600">
+                          {new Date(ev.startAt).toLocaleString()} - {new Date(ev.endAt).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-zinc-700">
+                          参加者: {ev.participants.map((p) => p.member?.name ?? p.memberId).join(", ")}
+                        </div>
+                        <TaskList
+                          eventId={ev.id}
+                          tasks={ev.tasks}
+                          onAdd={(title) => handleAddTask(ev.id, title)}
+                          onUpdate={(task, updates) => handleUpdateTask(ev.id, task, updates)}
+                          onDelete={(taskId) => handleDeleteTask(ev.id, taskId)}
+                        />
+                        <NotesSection
+                          eventId={ev.id}
+                          notes={(ev as any).notes as EventNote[] | undefined}
+                          onAdd={handleAddNote}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
+            {filteredEvents.length === 0 && <div className="text-sm text-zinc-500">該当するイベントがありません</div>}
           </div>
         </section>
 
@@ -334,17 +474,16 @@ export default function Home() {
             {(members ?? [])
               .filter((m) => m.role === "child")
               .map((child) => {
-                const childEvents = (events ?? []).filter((ev) =>
+                const childEvents = (filteredEvents ?? []).filter((ev) =>
                   ev.participants.some((p) => p.memberId === child.id),
                 );
                 const childTasks = childEvents.flatMap((ev) => ev.tasks);
                 return (
                   <div key={child.id} className="rounded border border-zinc-200 p-2">
                     <div className="font-medium">{child.name}</div>
-                    <div className="text-xs text-zinc-600">今週のイベント: {childEvents.length}件</div>
+                    <div className="text-xs text-zinc-600">今週/今月のイベント: {childEvents.length}件</div>
                     <div className="text-xs text-zinc-600">
-                      今週のタスク: {childTasks.length}件 (done:{" "}
-                      {childTasks.filter((t) => t.status === "done").length})
+                      タスク: {childTasks.length}件 (done: {childTasks.filter((t) => t.status === "done").length})
                     </div>
                   </div>
                 );
@@ -360,10 +499,14 @@ function TaskList({
   eventId,
   tasks,
   onAdd,
+  onUpdate,
+  onDelete,
 }: {
   eventId: string;
   tasks: Task[];
   onAdd: (title: string) => void;
+  onUpdate: (task: Task, updates: Partial<Task>) => void;
+  onDelete: (taskId: string) => void;
 }) {
   const [title, setTitle] = useState("");
   return (
@@ -389,15 +532,146 @@ function TaskList({
       <ul className="space-y-1 text-xs">
         {tasks.map((t) => (
           <li key={t.id} className="flex items-center justify-between rounded border border-zinc-200 px-2 py-1">
-            <span>
-              {t.title}{" "}
-              <span className="text-zinc-500">({t.status})</span>
+            <span className="flex flex-col">
+              <span className="font-medium">{t.title}</span>
+              <span className="text-zinc-500">
+                {t.status} {t.dueDate && ` / ${new Date(t.dueDate).toLocaleDateString()}`}
+              </span>
             </span>
-            {t.dueDate && <span className="text-zinc-500">{new Date(t.dueDate).toLocaleDateString()}</span>}
+            <div className="flex items-center gap-1">
+              <select
+                className="rounded border border-zinc-300 px-1 py-0.5"
+                value={t.status}
+                onChange={(e) => onUpdate(t, { status: e.target.value as TaskStatus })}
+              >
+                {Object.values(TaskStatus).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => onDelete(t.id)}
+                className="rounded bg-red-500 px-2 py-1 text-white"
+                aria-label="delete task"
+              >
+                削除
+              </button>
+            </div>
           </li>
         ))}
         {tasks.length === 0 && <li className="text-zinc-500">タスクなし</li>}
       </ul>
     </div>
   );
+}
+
+function MemberForm({ onAdd }: { onAdd: (name: string, role: "parent" | "child", grade?: string) => void }) {
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<"parent" | "child">("parent");
+  const [grade, setGrade] = useState("");
+  return (
+    <div className="mt-2 flex flex-col gap-2 text-sm">
+      <input
+        className="rounded border border-zinc-300 px-3 py-2 text-sm"
+        placeholder="名前"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <div className="flex gap-2">
+        <select
+          className="rounded border border-zinc-300 px-3 py-2 text-sm"
+          value={role}
+          onChange={(e) => setRole(e.target.value as any)}
+        >
+          <option value="parent">parent</option>
+          <option value="child">child</option>
+        </select>
+        <input
+          className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm"
+          placeholder="学年 (任意)"
+          value={grade}
+          onChange={(e) => setGrade(e.target.value)}
+        />
+      </div>
+      <button
+        onClick={() => {
+          onAdd(name, role, grade || undefined);
+          setName("");
+        }}
+        className="self-start rounded bg-emerald-600 px-3 py-1.5 text-white"
+      >
+        追加
+      </button>
+    </div>
+  );
+}
+
+function NotesSection({
+  eventId,
+  notes,
+  onAdd,
+}: {
+  eventId: string;
+  notes?: EventNote[];
+  onAdd: (eventId: string, content: string) => void;
+}) {
+  const [content, setContent] = useState("");
+  return (
+    <div className="mt-3 space-y-1 text-xs">
+      <div className="font-semibold text-zinc-700">メモ</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs"
+          placeholder="メモを追加"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+        />
+        <button
+          onClick={() => {
+            onAdd(eventId, content);
+            setContent("");
+          }}
+          className="rounded bg-blue-600 px-2 py-1 text-white"
+        >
+          追加
+        </button>
+      </div>
+      <ul className="space-y-1">
+        {(notes ?? []).map((n) => (
+          <li key={n.id} className="rounded border border-zinc-200 p-2">
+            <div className="font-medium">{n.content}</div>
+            <div className="text-[10px] text-zinc-500">{new Date(n.createdAt).toLocaleString()}</div>
+          </li>
+        ))}
+        {(!notes || notes.length === 0) && <li className="text-zinc-500">メモなし</li>}
+      </ul>
+    </div>
+  );
+}
+
+function groupEventsByDay(events: Event[], mode: "week" | "month") {
+  const now = new Date();
+  const start = new Date(now);
+  const end = new Date(now);
+  if (mode === "week") {
+    const day = now.getDay();
+    start.setDate(now.getDate() - day);
+    end.setDate(start.getDate() + 7);
+  } else {
+    start.setDate(1);
+    end.setMonth(start.getMonth() + 1);
+    end.setDate(0);
+  }
+  const grouped: { [key: string]: Event[] } = {};
+  events
+    .filter((ev) => {
+      const s = new Date(ev.startAt);
+      return s >= start && s <= end;
+    })
+    .forEach((ev) => {
+      const key = new Date(ev.startAt).toDateString();
+      grouped[key] = grouped[key] ? [...grouped[key], ev] : [ev];
+    });
+  return Object.entries(grouped).map(([label, evs]) => ({ label, events: evs }));
 }
