@@ -31,6 +31,7 @@ type Event = {
   note?: string | null;
   participants: { memberId: string; member?: Member }[];
   tasks: Task[];
+  notes?: EventNote[];
 };
 
 type ExternalEvent = {
@@ -68,8 +69,9 @@ export default function Home() {
   const [familyId, setFamilyId] = useState<string>(defaultFamily);
   const [message, setMessage] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
+  type FilterType = "all" | EventType;
   const [filterMember, setFilterMember] = useState<string>("all");
-  const [filterType, setFilterType] = useState<"all" | EventType>("all");
+  const [filterType, setFilterType] = useState<FilterType>("all");
 
   // Form state
   const [newEvent, setNewEvent] = useState({
@@ -89,17 +91,15 @@ export default function Home() {
     return (await res.json()) as T;
   };
 
-  const {
-    data: members,
-    mutate: mutateMembers,
-    isLoading: loadingMembers,
-  } = useSWR<Member[]>(familyId ? "/api/members" : null, fetcher);
+  const { data: members, mutate: mutateMembers } = useSWR<Member[]>(
+    familyId ? "/api/members" : null,
+    fetcher,
+  );
 
-  const {
-    data: events,
-    mutate: mutateEvents,
-    isLoading: loadingEvents,
-  } = useSWR<Event[]>(familyId ? "/api/events" : null, fetcher);
+  const { data: events, mutate: mutateEvents } = useSWR<Event[]>(
+    familyId ? "/api/events" : null,
+    fetcher,
+  );
 
   const {
     data: externalEvents,
@@ -120,11 +120,13 @@ export default function Home() {
 
   const conflictIds = useMemo(() => {
     const mapped = filteredEvents.map((e) => ({
-      ...e,
+      id: e.id,
+      importance: e.importance,
       startAt: new Date(e.startAt),
       endAt: new Date(e.endAt),
+      participants: e.participants.map((p) => ({ memberId: p.memberId })),
     }));
-    return detectConflicts(mapped as any);
+    return detectConflicts(mapped);
   }, [filteredEvents]);
 
   async function handleCreateEvent() {
@@ -353,6 +355,19 @@ export default function Home() {
         </section>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold">メンバー追加</h2>
+          <MemberForm onAdd={handleAddMember} />
+          <div className="mt-3 space-y-1 text-sm">
+            {(members ?? []).map((m) => (
+              <div key={m.id} className="rounded border border-zinc-200 p-2">
+                {m.name} <span className="text-xs text-zinc-500">({m.role})</span>{" "}
+                {m.grade && <span className="text-xs text-zinc-500">/ {m.grade}</span>}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold">Google予定の読み取り</h2>
           <p className="mt-1 text-sm text-zinc-600">連携後に /api/google/events を呼び出します。</p>
           <button
@@ -408,7 +423,7 @@ export default function Home() {
               <select
                 className="rounded border border-zinc-300 px-2 py-1"
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value as any)}
+                onChange={(e) => setFilterType(e.target.value as FilterType)}
               >
                 <option value="all">全タイプ</option>
                 {Object.values(EventType).map((t) => (
@@ -438,7 +453,7 @@ export default function Home() {
                               {typeLabel[ev.type]} / {importanceLabel[ev.importance]}
                             </span>
                           </div>
-                          {conflicted && <span className="text-xs font-semibold text-red-600">⚠ conflict</span>}
+                          {conflicted && <span className="text-xs font-semibold text-red-600">WARN conflict</span>}
                         </div>
                         <div className="text-xs text-zinc-600">
                           {new Date(ev.startAt).toLocaleString()} - {new Date(ev.endAt).toLocaleString()}
@@ -447,7 +462,6 @@ export default function Home() {
                           参加者: {ev.participants.map((p) => p.member?.name ?? p.memberId).join(", ")}
                         </div>
                         <TaskList
-                          eventId={ev.id}
                           tasks={ev.tasks}
                           onAdd={(title) => handleAddTask(ev.id, title)}
                           onUpdate={(task, updates) => handleUpdateTask(ev.id, task, updates)}
@@ -455,7 +469,7 @@ export default function Home() {
                         />
                         <NotesSection
                           eventId={ev.id}
-                          notes={(ev as any).notes as EventNote[] | undefined}
+                          notes={ev.notes}
                           onAdd={handleAddNote}
                         />
                       </div>
@@ -496,13 +510,11 @@ export default function Home() {
 }
 
 function TaskList({
-  eventId,
   tasks,
   onAdd,
   onUpdate,
   onDelete,
 }: {
-  eventId: string;
   tasks: Task[];
   onAdd: (title: string) => void;
   onUpdate: (task: Task, updates: Partial<Task>) => void;
@@ -582,7 +594,7 @@ function MemberForm({ onAdd }: { onAdd: (name: string, role: "parent" | "child",
         <select
           className="rounded border border-zinc-300 px-3 py-2 text-sm"
           value={role}
-          onChange={(e) => setRole(e.target.value as any)}
+          onChange={(e) => setRole(e.target.value as "parent" | "child")}
         >
           <option value="parent">parent</option>
           <option value="child">child</option>

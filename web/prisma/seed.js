@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { PrismaClient, Role, EventType, Importance, TaskStatus } = require("@prisma/client");
 
 const prisma = new PrismaClient();

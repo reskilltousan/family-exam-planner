@@ -3,7 +3,16 @@ import prisma from "@/lib/db";
 import { GET, POST } from "./route";
 import { resetDatabase } from "@/lib/test-utils";
 
-const mockReq = (body?: any, headers?: Record<string, string>) =>
+type EventBody = {
+  title: string;
+  startAt: string;
+  endAt: string;
+  type: string;
+  importance: string;
+  participantIds?: string[];
+};
+
+const mockReq = (body?: EventBody, headers?: Record<string, string>) =>
   new NextRequest("http://localhost/api/events", {
     method: body ? "POST" : "GET",
     body: body ? JSON.stringify(body) : undefined,

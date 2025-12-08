@@ -1,13 +1,17 @@
-import { Event } from "@prisma/client";
+type EventLike = {
+  id: string;
+  importance: "must" | "should" | "optional";
+  startAt: Date;
+  endAt: Date;
+  participants?: { memberId: string }[];
+};
 
-type EventWithParticipants = Event & { participants?: { memberId: string }[] };
-
-export function detectConflicts(events: EventWithParticipants[]) {
+export function detectConflicts(events: EventLike[]) {
   const mustEvents = events.filter((e) => e.importance === "must");
   const conflicts = new Set<string>();
 
   // Group by participant to check overlap
-  const byMember = new Map<string, EventWithParticipants[]>();
+  const byMember = new Map<string, EventLike[]>();
   for (const ev of mustEvents) {
     const participants = ev.participants ?? [];
     for (const p of participants) {
