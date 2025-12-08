@@ -16,20 +16,20 @@
 - [x] 2.1 イベント/タスク/メンバーの Route Handlers を実装する
   - /api/events (POST/GET), /api/events/[id] (PUT/DELETE), /api/events/[id]/tasks, /api/members の CRUD を design.md の処理フロー1-2に沿って実装。
   - familyId テナンシの検証と共通レスポンス構造を整える。
-- [ ] 2.2 Google カレンダー読み取りと外部イベント保存
+- [x] 2.2 Google カレンダー読み取りと外部イベント保存
   - /api/google/auth (開始/コールバック) と /api/google/events を実装し、OAuth トークンを OAuthToken に保存、外部イベントを ExternalEvent に格納して返却（処理フロー4）。
   - トークン期限切れ時のリフレッシュと再認可要求のハンドリングを入れる。
 - [x] 2.3 コンフリクト検知ロジックを実装する
   - design.md の処理フロー5に基づき、must イベントの時間重複判定（子ども/保護者単位）を lib/conflict.ts として実装し、カレンダーAPI/クライアントで利用可能にする。
 
 ## セクション3：インターフェース実装
-- [ ] 3.1 ダッシュボードUIを構築する
+- [x] 3.1 ダッシュボードUIを構築する
   - page.tsx を置き換え、CalendarView（週/月切替、フィルタ付き）、ChildWeeklyPanel、Google 連携ステータス導線を配置。
   - イベント/タスクの CRUD モーダル/ドロワーを組み込む。
-- [ ] 3.2 入力バリデーションとフォーム実装
+- [x] 3.2 入力バリデーションとフォーム実装
   - EventFormDrawer/TaskListPanel のクライアントバリデーション（必須・時間逆転チェック）と API エラーの表示を実装。
   - メンバー選択・担当者割当 UI を作成。
-- [ ] 3.3 表示ロジックとフォーマット
+- [x] 3.3 表示ロジックとフォーマット
   - Google外部イベントを区別表示（アイコン/スタイル）し、コンフリクト結果をカレンダー上で警告表示。
   - タスクステータス更新やメモ表示を ChildWeeklyPanel と詳細ビューで反映。
 
