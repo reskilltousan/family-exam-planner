@@ -6,20 +6,20 @@
 - メンバーC（フロントエンド/UX/テスト）: セクション3全般、4.2、4.3。カレンダーUI・子ども別ビュー・フォーム/バリデーション/表示ロジックと、テスト/受入確認を担当。
 
 ## セクション1：データモデル実装
-- [ ] 1.1 Prisma スキーマを定義する
+- [x] 1.1 Prisma スキーマを定義する
   - Family/Member/Event/EventParticipant/Task/EventNote/ExternalEvent/OAuthToken を schema.prisma に追加し、start/end の整合性など基本バリデーションをコメントで明示。
   - Prisma クライアント初期化 (lib/db.ts) を作成し、環境変数（本番: Azure DB, ローカル: SQLite も可）を想定した設定にする。
-- [ ] 1.2 マイグレーション/シードの初期セットアップ
+- [x] 1.2 マイグレーション/シードの初期セットアップ
   - prisma migrate 用スクリプトを追加し、開発用シード（ダミーの family/member/event/task）を準備して初期表示ができる状態にする。
 
 ## セクション2：ビジネスロジック実装
-- [ ] 2.1 イベント/タスク/メンバーの Route Handlers を実装する
+- [x] 2.1 イベント/タスク/メンバーの Route Handlers を実装する
   - /api/events (POST/GET), /api/events/[id] (PUT/DELETE), /api/events/[id]/tasks, /api/members の CRUD を design.md の処理フロー1-2に沿って実装。
   - familyId テナンシの検証と共通レスポンス構造を整える。
 - [ ] 2.2 Google カレンダー読み取りと外部イベント保存
   - /api/google/auth (開始/コールバック) と /api/google/events を実装し、OAuth トークンを OAuthToken に保存、外部イベントを ExternalEvent に格納して返却（処理フロー4）。
   - トークン期限切れ時のリフレッシュと再認可要求のハンドリングを入れる。
-- [ ] 2.3 コンフリクト検知ロジックを実装する
+- [x] 2.3 コンフリクト検知ロジックを実装する
   - design.md の処理フロー5に基づき、must イベントの時間重複判定（子ども/保護者単位）を lib/conflict.ts として実装し、カレンダーAPI/クライアントで利用可能にする。
 
 ## セクション3：インターフェース実装
