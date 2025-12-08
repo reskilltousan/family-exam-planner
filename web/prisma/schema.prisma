@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = env("DATABASE_PROVIDER") // e.g. "postgresql" | "mysql" | "sqlite"
+  provider = "sqlite" // change to "postgresql" in production
   url      = env("DATABASE_URL")
 }
 
@@ -12,6 +12,7 @@ model Family {
   name      String
   members   Member[]
   events    Event[]
+  externalEvents ExternalEvent[]
   tokens    OAuthToken[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -56,7 +57,6 @@ model Event {
   updatedAt     DateTime           @updatedAt
 
   @@index([familyId, startAt, endAt])
-  @@check(endAt > startAt)
 }
 
 enum EventType {
@@ -107,6 +107,8 @@ model EventNote {
   eventId   String
   content   String
   createdBy String?
+  member    Member?  @relation(fields: [memberId], references: [id])
+  memberId  String?
   createdAt DateTime @default(now())
 }
 

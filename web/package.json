@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "cross-env DATABASE_URL=\"file:./dev.db\" npm run prisma:generate && cross-env DATABASE_URL=\"file:./dev.db\" npm run prisma:db:push && cross-env DATABASE_URL=\"file:./dev.db\" vitest run",
+    "test:watch": "cross-env DATABASE_URL=\"file:./dev.db\" npm run prisma:generate && cross-env DATABASE_URL=\"file:./dev.db\" npm run prisma:db:push && cross-env DATABASE_URL=\"file:./dev.db\" vitest watch",
     "prisma:generate": "prisma generate",
+    "prisma:db:push": "prisma db push --skip-generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed"
   },
@@ -29,6 +32,8 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.7",
+    "cross-env": "^7.0.3",
+    "vitest": "^2.1.4",
     "prisma": "^6.1.0",
     "tailwindcss": "^4",
     "typescript": "^5"
