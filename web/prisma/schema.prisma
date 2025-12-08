@@ -136,4 +136,6 @@ model OAuthToken {
   expiresAt    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@unique([familyId, provider])
 }
