@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import useSWR from "swr";
 import { Importance, EventType, TaskStatus } from "@prisma/client";
 import { detectConflicts } from "@/lib/conflict";
 
@@ -56,11 +57,8 @@ const typeLabel: Record<EventType, string> = {
 };
 
 export default function Home() {
-  const [familyId, setFamilyId] = useState<string>("");
-  const [members, setMembers] = useState<Member[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const defaultFamily = process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "";
+  const [familyId, setFamilyId] = useState<string>(defaultFamily);
   const [message, setMessage] = useState<string>("");
 
   // Form state
@@ -73,67 +71,40 @@ export default function Home() {
     participantIds: [] as string[],
   });
 
+  const fetcher = async <T,>(url: string) => {
+    const res = await fetch(url, {
+      headers: { "x-family-id": familyId },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return (await res.json()) as T;
+  };
+
+  const {
+    data: members,
+    mutate: mutateMembers,
+    isLoading: loadingMembers,
+  } = useSWR<Member[]>(familyId ? "/api/members" : null, fetcher);
+
+  const {
+    data: events,
+    mutate: mutateEvents,
+    isLoading: loadingEvents,
+  } = useSWR<Event[]>(familyId ? "/api/events" : null, fetcher);
+
+  const {
+    data: externalEvents,
+    mutate: mutateExternal,
+    isLoading: loadingExternal,
+  } = useSWR<ExternalEvent[]>(familyId ? "/api/google/events" : null, fetcher);
+
   const conflictIds = useMemo(() => {
-    const mapped = events.map((e) => ({
+    const mapped = (events ?? []).map((e) => ({
       ...e,
       startAt: new Date(e.startAt),
       endAt: new Date(e.endAt),
     }));
     return detectConflicts(mapped as any);
   }, [events]);
-
-  async function fetchJSON<T>(url: string, options?: RequestInit) {
-    const res = await fetch(url, options);
-    if (!res.ok) {
-      throw new Error(await res.text());
-    }
-    return (await res.json()) as T;
-  }
-
-  async function loadMembers() {
-    if (!familyId) return;
-    const data = await fetchJSON<Member[]>("/api/members", {
-      headers: { "x-family-id": familyId },
-    });
-    setMembers(data);
-  }
-
-  async function loadEvents() {
-    if (!familyId) return;
-    const data = await fetchJSON<Event[]>("/api/events", {
-      headers: { "x-family-id": familyId },
-    });
-    setEvents(data);
-  }
-
-  async function loadExternal() {
-    if (!familyId) return;
-    const data = await fetchJSON<ExternalEvent[]>("/api/google/events", {
-      headers: { "x-family-id": familyId },
-    });
-    setExternalEvents(data);
-  }
-
-  useEffect(() => {
-    const defaultFamily = process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "";
-    setFamilyId(defaultFamily);
-  }, []);
-
-  async function handleSync() {
-    if (!familyId) {
-      setMessage("familyId is required");
-      return;
-    }
-    try {
-      setLoading(true);
-      await Promise.all([loadMembers(), loadEvents(), loadExternal()]);
-      setMessage("Synced successfully");
-    } catch (e) {
-      setMessage((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleCreateEvent() {
     if (!familyId) {
@@ -145,8 +116,7 @@ export default function Home() {
       return;
     }
     try {
-      setLoading(true);
-      await fetchJSON<Event>("/api/events", {
+      await fetch("/api/events", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -162,19 +132,17 @@ export default function Home() {
         importance: Importance.must,
         participantIds: [],
       });
-      await loadEvents();
+      await mutateEvents();
       setMessage("Event created");
     } catch (e) {
       setMessage((e as Error).message);
-    } finally {
-      setLoading(false);
     }
   }
 
   async function handleAddTask(eventId: string, title: string) {
     if (!familyId || !title) return;
     try {
-      await fetchJSON("/api/events/" + eventId + "/tasks", {
+      await fetch("/api/events/" + eventId + "/tasks", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -182,7 +150,7 @@ export default function Home() {
         },
         body: JSON.stringify({ title }),
       });
-      await loadEvents();
+      await mutateEvents();
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -205,11 +173,14 @@ export default function Home() {
             onChange={(e) => setFamilyId(e.target.value)}
           />
           <button
-            onClick={handleSync}
-            disabled={loading}
+            onClick={() => {
+              mutateMembers();
+              mutateEvents();
+              mutateExternal();
+            }}
             className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
-            {loading ? "Sync..." : "Sync data"}
+            Sync data
           </button>
         </div>
       </header>
@@ -302,14 +273,14 @@ export default function Home() {
           <h2 className="text-lg font-semibold">Google予定の読み取り</h2>
           <p className="mt-1 text-sm text-zinc-600">連携後に /api/google/events を呼び出します。</p>
           <button
-            onClick={loadExternal}
-            disabled={!familyId}
+            onClick={() => mutateExternal()}
+            disabled={!familyId || loadingExternal}
             className="mt-3 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
-            外部イベント再取得
+            {loadingExternal ? "取得中..." : "外部イベント再取得"}
           </button>
           <div className="mt-3 space-y-2 text-sm">
-            {externalEvents.map((ev) => (
+            {(externalEvents ?? []).map((ev) => (
               <div key={ev.id} className="rounded border border-zinc-200 p-2">
                 <div className="font-medium">{ev.title}</div>
                 <div className="text-xs text-zinc-600">
@@ -324,7 +295,7 @@ export default function Home() {
         <section className="lg:col-span-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold">イベント一覧</h2>
           <div className="mt-3 space-y-3">
-            {events.map((ev) => {
+            {(events ?? []).map((ev) => {
               const conflicted = conflictIds.has(ev.id);
               return (
                 <div
@@ -360,10 +331,10 @@ export default function Home() {
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold">子ども別ビュー（簡易）</h2>
           <div className="mt-2 space-y-2 text-sm">
-            {members
+            {(members ?? [])
               .filter((m) => m.role === "child")
               .map((child) => {
-                const childEvents = events.filter((ev) =>
+                const childEvents = (events ?? []).filter((ev) =>
                   ev.participants.some((p) => p.memberId === child.id),
                 );
                 const childTasks = childEvents.flatMap((ev) => ev.tasks);
