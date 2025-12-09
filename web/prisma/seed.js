@@ -60,6 +60,25 @@ async function main() {
   });
 
   console.log("Seed completed: family=%s event=%s", family.id, examEvent.id);
+
+  // Templates
+  await prisma.template.deleteMany({});
+  const mockTemplate = await prisma.template.create({
+    data: {
+      name: "模試準備テンプレ",
+      description: "申込・支払・受験票印刷・持ち物準備",
+      eventType: EventType.exam,
+      tasks: {
+        create: [
+          { title: "模試申込", daysBeforeEvent: 14 },
+          { title: "受験料支払", daysBeforeEvent: 10 },
+          { title: "受験票印刷", daysBeforeEvent: 3 },
+          { title: "持ち物準備", daysBeforeEvent: 1 },
+        ],
+      },
+    },
+  });
+  console.log("Template created:", mockTemplate.id);
 }
 
 main()

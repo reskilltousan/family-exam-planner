@@ -34,6 +34,20 @@ type Event = {
   notes?: EventNote[];
 };
 
+type TemplateTask = {
+  id: string;
+  title: string;
+  daysBeforeEvent?: number | null;
+};
+
+type Template = {
+  id: string;
+  name: string;
+  description?: string | null;
+  eventType?: EventType | null;
+  tasks: TemplateTask[];
+};
+
 type ExternalEvent = {
   id: string;
   title: string;
@@ -106,6 +120,7 @@ export default function Home() {
     type: EventType.exam as EventType,
     importance: Importance.must as Importance,
     participantIds: [] as string[],
+    templateId: "",
   });
 
   useEffect(() => {
@@ -138,6 +153,8 @@ export default function Home() {
     familyId ? "/api/events" : null,
     fetcher,
   );
+
+  const { data: templates } = useSWR<Template[]>(familyId ? "/api/templates" : "/api/templates", fetcher);
 
   const {
     data: externalEvents,
@@ -602,6 +619,18 @@ export default function Home() {
                 </option>
               ))}
             </select>
+            <select
+              className="rounded border border-zinc-300 px-3 py-2 text-sm"
+              value={newEvent.templateId}
+              onChange={(e) => setNewEvent({ ...newEvent, templateId: e.target.value })}
+            >
+              <option value="">テンプレートなし</option>
+              {(templates ?? []).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
             <div className="col-span-1 sm:col-span-2">
               <p className="text-xs text-zinc-600">参加者を選択</p>
               <div className="flex flex-wrap gap-2">
@@ -632,6 +661,21 @@ export default function Home() {
           >
             イベントを追加
           </button>
+          {newEvent.templateId && (
+            <div className="mt-2 rounded border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+              <div className="font-semibold">選択中テンプレートのタスク</div>
+              <ul className="mt-1 list-disc pl-5">
+                {(templates ?? [])
+                  .find((t) => t.id === newEvent.templateId)
+                  ?.tasks.map((t) => (
+                    <li key={t.id}>
+                      {t.title}
+                      {t.daysBeforeEvent != null && ` / イベント${t.daysBeforeEvent}日前`}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
         </section>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">

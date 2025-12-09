@@ -34,6 +34,7 @@ export const eventSchema = z
     location: z.string().optional(),
     note: z.string().optional(),
     participantIds: z.array(z.string()).default([]),
+    templateId: z.string().optional(),
   })
   .refine((data) => data.endAt > data.startAt, {
     message: "endAt must be after startAt",
