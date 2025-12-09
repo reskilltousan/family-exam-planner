@@ -385,6 +385,21 @@ export default function Home() {
     }
   }
 
+  async function handleUpdateEvent(eventId: string, payload: Omit<Event, "participants" | "tasks" | "notes"> & { participantIds: string[] }) {
+    if (!familyId) return;
+    try {
+      await fetch(`/api/events/${eventId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-family-id": familyId },
+        body: JSON.stringify(payload),
+      });
+      await mutateEvents();
+      setMessage("イベントを更新しました");
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
   async function handleCreateFamily() {
     if (!newFamilyName.trim()) {
       setMessage("family名を入力してください");
@@ -407,6 +422,21 @@ export default function Home() {
       await mutateEvents();
       await mutateExternal();
       await mutateGoogleState();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleDeleteEvent(eventId: string) {
+    if (!familyId) return;
+    try {
+      await fetch(`/api/events/${eventId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "x-family-id": familyId },
+      });
+      await mutateEvents();
+      setSelectedEvent(null);
+      setMessage("イベントを削除しました");
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -1011,6 +1041,8 @@ export default function Home() {
               members={members ?? []}
               conflicted={selectedEvent.kind === "app" ? conflictIds.has(selectedEvent.event.id) : false}
               onClose={() => setSelectedEvent(null)}
+              onUpdate={handleUpdateEvent}
+              onDelete={handleDeleteEvent}
             />
           )}
         </section>
@@ -1513,14 +1545,84 @@ function SelectedEventDetail({
   members,
   conflicted,
   onClose,
+  onUpdate,
+  onDelete,
 }: {
   selected: { kind: "app"; event: Event } | { kind: "google"; event: ExternalEvent };
   members: Member[];
   conflicted: boolean;
   onClose: () => void;
+  onUpdate: (eventId: string, payload: Omit<Event, "participants" | "tasks" | "notes"> & { participantIds: string[] }) => Promise<void>;
+  onDelete: (eventId: string) => Promise<void>;
 }) {
   const isApp = selected.kind === "app";
   const ev = selected.event as Event & ExternalEvent;
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    title: isApp ? (ev as Event).title : ev.title,
+    startAt: ev.startAt.slice(0, 16),
+    endAt: ev.endAt.slice(0, 16),
+    type: isApp ? (ev as Event).type : EventType.exam,
+    importance: isApp ? (ev as Event).importance : Importance.should,
+    location: (ev as Event).location ?? "",
+    note: (ev as Event).note ?? "",
+    participantIds: isApp ? (ev as Event).participants.map((p) => p.memberId) : [],
+  });
+  const [localError, setLocalError] = useState("");
+
+  useEffect(() => {
+    setEditing(false);
+    setLocalError("");
+    setForm({
+      title: isApp ? (ev as Event).title : ev.title,
+      startAt: ev.startAt.slice(0, 16),
+      endAt: ev.endAt.slice(0, 16),
+      type: isApp ? (ev as Event).type : EventType.exam,
+      importance: isApp ? (ev as Event).importance : Importance.should,
+      location: (ev as Event).location ?? "",
+      note: (ev as Event).note ?? "",
+      participantIds: isApp ? (ev as Event).participants.map((p) => p.memberId) : [],
+    });
+  }, [ev, isApp]);
+
+  async function handleSave() {
+    if (!isApp) return;
+    if (!form.title.trim()) {
+      setLocalError("タイトルを入力してください");
+      return;
+    }
+    if (!form.startAt || !form.endAt) {
+      setLocalError("開始と終了を入力してください");
+      return;
+    }
+    const start = new Date(form.startAt);
+    const end = new Date(form.endAt);
+    if (end <= start) {
+      setLocalError("終了は開始より後にしてください");
+      return;
+    }
+    setLocalError("");
+    await onUpdate((ev as Event).id, {
+      id: (ev as Event).id,
+      title: form.title.trim(),
+      startAt: start.toISOString(),
+      endAt: end.toISOString(),
+      type: form.type,
+      importance: form.importance,
+      location: form.location || null,
+      note: form.note || null,
+      participantIds: form.participantIds,
+    });
+    setEditing(false);
+  }
+
+  async function handleDelete() {
+    if (!isApp) return;
+    const ok = window.confirm("イベントを削除しますか？関連タスク/メモも削除されます。");
+    if (!ok) return;
+    await onDelete((ev as Event).id);
+  }
+
   return (
     <div className="mt-3 rounded border border-zinc-200 bg-zinc-50 p-4">
       <div className="flex items-center justify-between">
@@ -1548,7 +1650,7 @@ function SelectedEventDetail({
         </div>
         {"location" in ev && ev.location && <div>場所: {ev.location}</div>}
         {"organizer" in ev && ev.organizer && <div>主催者: {ev.organizer}</div>}
-        {isApp && (
+        {isApp && !editing && (
           <>
             <div>重要度: {importanceLabel[(ev as Event).importance as Importance]}</div>
             <div>
@@ -1559,6 +1661,122 @@ function SelectedEventDetail({
             </div>
             {(ev as Event).note && <div>メモ: {(ev as Event).note}</div>}
           </>
+        )}
+        {isApp && editing && (
+          <div className="mt-2 space-y-2">
+            <input
+              className="w-full rounded border border-zinc-300 px-2 py-1 text-sm"
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+            />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="datetime-local"
+                className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm"
+                value={form.startAt}
+                onChange={(e) => setForm({ ...form, startAt: e.target.value })}
+              />
+              <input
+                type="datetime-local"
+                className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm"
+                value={form.endAt}
+                onChange={(e) => setForm({ ...form, endAt: e.target.value })}
+              />
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <select
+                className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm"
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value as EventType })}
+              >
+                {Object.values(EventType).map((t) => (
+                  <option key={t} value={t}>
+                    {typeLabel[t]}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm"
+                value={form.importance}
+                onChange={(e) => setForm({ ...form, importance: e.target.value as Importance })}
+              >
+                {Object.values(Importance).map((v) => (
+                  <option key={v} value={v}>
+                    {importanceLabel[v]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <input
+              className="w-full rounded border border-zinc-300 px-2 py-1 text-sm"
+              placeholder="場所"
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+            />
+            <textarea
+              className="w-full rounded border border-zinc-300 px-2 py-1 text-sm"
+              placeholder="メモ"
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+            />
+            <div className="space-y-1">
+              <div className="text-xs text-zinc-600">参加者</div>
+              <div className="flex flex-wrap gap-2">
+                {members.map((m) => {
+                  const checked = form.participantIds.includes(m.id);
+                  return (
+                    <label key={m.id} className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const list = e.target.checked
+                            ? [...form.participantIds, m.id]
+                            : form.participantIds.filter((id) => id !== m.id);
+                          setForm({ ...form, participantIds: list });
+                        }}
+                      />
+                      {m.name}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            {localError && <div className="text-xs text-red-600">{localError}</div>}
+            <div className="flex gap-2">
+              <button
+                className="rounded bg-blue-600 px-3 py-1 text-white"
+                onClick={handleSave}
+              >
+                保存
+              </button>
+              <button
+                className="rounded border border-zinc-300 px-3 py-1"
+                onClick={() => {
+                  setEditing(false);
+                  setLocalError("");
+                }}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        )}
+        {isApp && !editing && (
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <button
+              className="rounded border border-zinc-300 px-3 py-1"
+              onClick={() => setEditing(true)}
+            >
+              編集
+            </button>
+            <button
+              className="rounded border border-red-400 px-3 py-1 text-red-600"
+              onClick={handleDelete}
+            >
+              削除
+            </button>
+          </div>
         )}
       </div>
     </div>
