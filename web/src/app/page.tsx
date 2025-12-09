@@ -112,6 +112,17 @@ export default function Home() {
   const [selectedEvent, setSelectedEvent] = useState<
     { kind: "app"; event: Event } | { kind: "google"; event: ExternalEvent } | null
   >(null);
+  const [newTemplate, setNewTemplate] = useState<{
+    name: string;
+    description: string;
+    eventType: EventType | "";
+    tasks: { title: string; daysBeforeEvent?: number | null }[];
+  }>({
+    name: "",
+    description: "",
+    eventType: "",
+    tasks: [],
+  });
 
   const [newEvent, setNewEvent] = useState({
     title: "",
@@ -397,6 +408,40 @@ export default function Home() {
     }
   }
 
+  async function handleCreateTemplate() {
+    if (!newTemplate.name.trim()) {
+      setMessage("テンプレート名を入力してください");
+      return;
+    }
+    try {
+      await fetch("/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTemplate.name.trim(),
+          description: newTemplate.description || undefined,
+          eventType: newTemplate.eventType || undefined,
+          tasks: newTemplate.tasks.filter((t) => t.title.trim()),
+        }),
+      });
+      setNewTemplate({ name: "", description: "", eventType: "", tasks: [] });
+      setMessage("テンプレートを作成しました");
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleDeleteTemplate(id: string) {
+    const ok = window.confirm("テンプレートを削除しますか？");
+    if (!ok) return;
+    try {
+      await fetch(`/api/templates?id=${id}`, { method: "DELETE" });
+      setMessage("テンプレートを削除しました");
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
   const groupedEvents = useMemo(
     () => groupEventsByDay(filteredEvents, viewMode),
     [filteredEvents, viewMode],
@@ -560,6 +605,129 @@ export default function Home() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold">タスクテンプレート管理</h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2 text-sm">
+              <input
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="テンプレート名"
+                value={newTemplate.name}
+                onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })}
+              />
+              <input
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="説明 (任意)"
+                value={newTemplate.description}
+                onChange={(e) => setNewTemplate({ ...newTemplate, description: e.target.value })}
+              />
+              <select
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                value={newTemplate.eventType}
+                onChange={(e) => setNewTemplate({ ...newTemplate, eventType: e.target.value as EventType | "" })}
+              >
+                <option value="">イベントタイプ未指定</option>
+                {Object.values(EventType).map((t) => (
+                  <option key={t} value={t}>
+                    {typeLabel[t as EventType]}
+                  </option>
+                ))}
+              </select>
+              <div className="rounded border border-zinc-200 p-2">
+                <div className="text-xs font-semibold">タスク定義</div>
+                <div className="space-y-2">
+                  {newTemplate.tasks.map((t, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs"
+                        placeholder="タスク名"
+                        value={t.title}
+                        onChange={(e) => {
+                          const next = [...newTemplate.tasks];
+                          next[idx] = { ...next[idx], title: e.target.value };
+                          setNewTemplate({ ...newTemplate, tasks: next });
+                        }}
+                      />
+                      <input
+                        type="number"
+                        className="w-28 rounded border border-zinc-300 px-2 py-1 text-xs"
+                        placeholder="何日前"
+                        value={t.daysBeforeEvent ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const next = [...newTemplate.tasks];
+                          next[idx] = {
+                            ...next[idx],
+                            daysBeforeEvent: val === "" ? null : Number(val),
+                          };
+                          setNewTemplate({ ...newTemplate, tasks: next });
+                        }}
+                      />
+                      <button
+                        className="rounded border border-red-400 px-2 py-1 text-[11px] text-red-600"
+                        onClick={() => {
+                          const next = newTemplate.tasks.filter((_, i) => i !== idx);
+                          setNewTemplate({ ...newTemplate, tasks: next });
+                        }}
+                      >
+                        削除
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="rounded border border-zinc-300 px-2 py-1 text-xs"
+                    onClick={() =>
+                      setNewTemplate({
+                        ...newTemplate,
+                        tasks: [...newTemplate.tasks, { title: "", daysBeforeEvent: null }],
+                      })
+                    }
+                  >
+                    + タスク行を追加
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={handleCreateTemplate}
+                className="rounded bg-emerald-600 px-3 py-2 text-white"
+              >
+                テンプレートを作成
+              </button>
+            </div>
+            <div className="space-y-2 text-sm">
+              {(templates ?? []).map((t) => (
+                <div key={t.id} className="rounded border border-zinc-200 p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">{t.name}</div>
+                    <button
+                      className="rounded border border-red-400 px-2 py-1 text-[11px] text-red-600"
+                      onClick={() => handleDeleteTemplate(t.id)}
+                    >
+                      削除
+                    </button>
+                  </div>
+                  <div className="text-xs text-zinc-600">
+                    {t.eventType ? typeLabel[t.eventType] : "タイプ未指定"}
+                  </div>
+                  {t.description && <div className="text-xs text-zinc-600">{t.description}</div>}
+                  <ul className="mt-1 list-disc pl-4 text-xs text-zinc-700">
+                    {t.tasks.map((task) => (
+                      <li key={task.id}>
+                        {task.title}
+                        {task.daysBeforeEvent != null && ` / イベント${task.daysBeforeEvent}日前`}
+                      </li>
+                    ))}
+                    {t.tasks.length === 0 && <li>タスクなし</li>}
+                  </ul>
+                </div>
+              ))}
+              {(templates ?? []).length === 0 && (
+                <div className="text-xs text-zinc-500">テンプレートがありません</div>
+              )}
             </div>
           </div>
         </section>

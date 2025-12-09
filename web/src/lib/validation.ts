@@ -51,3 +51,19 @@ export const taskSchema = z.object({
 export const taskUpdateSchema = taskSchema.extend({
   id: z.string().min(1),
 });
+
+export const templateTaskSchema = z.object({
+  title: z.string().min(1),
+  daysBeforeEvent: z.number().int().optional().nullable(),
+});
+
+export const templateSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  eventType: z.nativeEnum(EventType).optional(),
+  tasks: z.array(templateTaskSchema).optional(),
+});
+
+export const templateUpdateSchema = templateSchema.extend({
+  id: z.string().min(1),
+});

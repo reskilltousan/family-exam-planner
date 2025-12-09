@@ -15,3 +15,4 @@ Need to refresh the prompts or this guide later? Re-run `npx spec-driven-codex i
 
 # Agent Operational Note
 - Always leverage available MCP tools (Chrome DevTools, Playwright, Context7 docs, Firecrawl, Serena project helpers, etc.) for browsing, scraping, code navigation, and automation. Check tool availability at session start and prefer these over manual steps when they apply.
+- Keep local progress docs in sync: update `tasks.md`（ルート）や `.sdd/specs/.../tasks.md` などタスク系ファイルを、作業内容に応じて必ず反映する。
