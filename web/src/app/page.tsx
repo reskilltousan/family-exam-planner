@@ -112,6 +112,8 @@ export default function Home() {
   const [newFamilyName, setNewFamilyName] = useState("");
   const [registerForm, setRegisterForm] = useState({ name: "", email: "", password: "" });
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [registerErrors, setRegisterErrors] = useState<Record<string, string>>({});
+  const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
   const [selectedEvent, setSelectedEvent] = useState<
     { kind: "app"; event: Event } | { kind: "google"; event: ExternalEvent } | null
   >(null);
@@ -448,21 +450,28 @@ export default function Home() {
   }
 
   async function handleRegister() {
-    if (!registerForm.name || !registerForm.email || !registerForm.password) {
-      setMessage("name/email/passwordを入力してください");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (!registerForm.name.trim()) errors.name = "family名を入力してください";
+    if (!registerForm.email.trim()) errors.email = "emailを入力してください";
+    if (!registerForm.password.trim()) errors.password = "passwordを入力してください";
+    if (registerForm.password && registerForm.password.length < 6) errors.password = "6文字以上で入力してください";
+    setRegisterErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(registerForm),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "登録に失敗しました");
+      }
       const data = (await res.json()) as { id: string; name: string; email: string };
       setFamilyId(data.id);
       setMessage("familyを新規登録し選択しました");
       setRegisterForm({ name: "", email: "", password: "" });
+      setRegisterErrors({});
       await mutateMembers();
       await mutateEvents();
       await mutateExternal();
@@ -473,21 +482,26 @@ export default function Home() {
   }
 
   async function handleLogin() {
-    if (!loginForm.email || !loginForm.password) {
-      setMessage("email/passwordを入力してください");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (!loginForm.email.trim()) errors.email = "emailを入力してください";
+    if (!loginForm.password.trim()) errors.password = "passwordを入力してください";
+    setLoginErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(loginForm),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || "ログインに失敗しました");
+      }
       const data = (await res.json()) as { id: string; name: string; email: string };
       setFamilyId(data.id);
       setMessage("familyにログインし選択しました");
       setLoginForm({ email: "", password: "" });
+      setLoginErrors({});
       await mutateMembers();
       await mutateEvents();
       await mutateExternal();
@@ -661,52 +675,57 @@ export default function Home() {
               </div>
               <div className="rounded border border-zinc-200 p-3 space-y-2">
                 <div className="text-xs font-semibold text-zinc-700">サインアップ</div>
-                <input
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="family名"
-                  value={registerForm.name}
-                  onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
-                />
-                <input
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="email"
-                  value={registerForm.email}
-                  onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-                />
-                <input
-                  type="password"
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="password (6文字以上)"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                />
-                <button
-                  className="rounded bg-emerald-600 px-3 py-2 text-white"
-                  onClick={handleRegister}
-                >
-                  サインアップして選択
+              <input
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="family名"
+                value={registerForm.name}
+                onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
+              />
+              {registerErrors.name && <div className="text-xs text-red-600">{registerErrors.name}</div>}
+              <input
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="email"
+                value={registerForm.email}
+                onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
+              />
+              {registerErrors.email && <div className="text-xs text-red-600">{registerErrors.email}</div>}
+              <input
+                type="password"
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="password (6文字以上)"
+                value={registerForm.password}
+                onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
+              />
+              {registerErrors.password && <div className="text-xs text-red-600">{registerErrors.password}</div>}
+              <button
+                className="rounded bg-emerald-600 px-3 py-2 text-white"
+                onClick={handleRegister}
+              >
+                サインアップして選択
                 </button>
               </div>
               <div className="rounded border border-zinc-200 p-3 space-y-2">
                 <div className="text-xs font-semibold text-zinc-700">ログイン</div>
-                <input
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="email"
-                  value={loginForm.email}
-                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                />
-                <input
-                  type="password"
-                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                  placeholder="password"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                />
-                <button
-                  className="rounded bg-blue-600 px-3 py-2 text-white"
-                  onClick={handleLogin}
-                >
-                  ログインして選択
+              <input
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="email"
+                value={loginForm.email}
+                onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+              />
+              {loginErrors.email && <div className="text-xs text-red-600">{loginErrors.email}</div>}
+              <input
+                type="password"
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="password"
+                value={loginForm.password}
+                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+              />
+              {loginErrors.password && <div className="text-xs text-red-600">{loginErrors.password}</div>}
+              <button
+                className="rounded bg-blue-600 px-3 py-2 text-white"
+                onClick={handleLogin}
+              >
+                ログインして選択
                 </button>
               </div>
             </div>
