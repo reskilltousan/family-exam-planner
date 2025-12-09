@@ -12,3 +12,6 @@ Run the Codex CLI prompts in the following order:
 6. `/sdd-archive` — Capture outcomes, lessons learned, and next steps.
 
 Need to refresh the prompts or this guide later? Re-run `npx spec-driven-codex init` (to keep existing prompt customisations) or use `npx spec-driven-codex upgrade` to force-install the latest templates.
+
+# Agent Operational Note
+- Always leverage available MCP tools (Chrome DevTools, Playwright, Context7 docs, Firecrawl, Serena project helpers, etc.) for browsing, scraping, code navigation, and automation. Check tool availability at session start and prefer these over manual steps when they apply.

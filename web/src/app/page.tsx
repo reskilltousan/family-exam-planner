@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { Importance, EventType, TaskStatus } from "@prisma/client";
+import { Importance, EventType, TaskStatus, Role } from "@prisma/client";
 import { detectConflicts } from "@/lib/conflict";
 
 type Member = {
   id: string;
   name: string;
-  role: string;
+  role: Role;
   grade?: string | null;
 };
 
@@ -41,6 +41,7 @@ type ExternalEvent = {
   endAt: string;
   source: string;
   organizer?: string | null;
+  location?: string | null;
 };
 
 type EventNote = {
@@ -48,6 +49,27 @@ type EventNote = {
   content: string;
   createdBy?: string | null;
   createdAt: string;
+};
+
+type GoogleState = {
+  connected: boolean;
+  expired: boolean;
+  expiresAt: string | null;
+  lastSyncedAt: string | null;
+  hasRefreshToken: boolean;
+  externalEventsCount: number;
+};
+
+type CalendarItem = {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  source: "app" | "google";
+  importance?: Importance;
+  participants?: string[];
+  location?: string | null;
+  rawId?: string;
 };
 
 const importanceLabel: Record<Importance, string> = {
@@ -69,11 +91,14 @@ export default function Home() {
   const [familyId, setFamilyId] = useState<string>(defaultFamily);
   const [message, setMessage] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
-  type FilterType = "all" | EventType;
   const [filterMember, setFilterMember] = useState<string>("all");
-  const [filterType, setFilterType] = useState<FilterType>("all");
+  const [filterType, setFilterType] = useState<"all" | EventType>("all");
+  const [eventErrors, setEventErrors] = useState<Record<string, string>>({});
+  const [newFamilyName, setNewFamilyName] = useState("");
+  const [selectedEvent, setSelectedEvent] = useState<
+    { kind: "app"; event: Event } | { kind: "google"; event: ExternalEvent } | null
+  >(null);
 
-  // Form state
   const [newEvent, setNewEvent] = useState({
     title: "",
     startAt: "",
@@ -82,6 +107,19 @@ export default function Home() {
     importance: Importance.must as Importance,
     participantIds: [] as string[],
   });
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("familyId");
+    if (!defaultFamily && saved) {
+      setFamilyId(saved);
+    }
+  }, [defaultFamily]);
+
+  useEffect(() => {
+    if (familyId) {
+      window.localStorage.setItem("familyId", familyId);
+    }
+  }, [familyId]);
 
   const fetcher = async <T,>(url: string) => {
     const res = await fetch(url, {
@@ -105,7 +143,14 @@ export default function Home() {
     data: externalEvents,
     mutate: mutateExternal,
     isLoading: loadingExternal,
+    error: externalError,
   } = useSWR<ExternalEvent[]>(familyId ? "/api/google/events" : null, fetcher);
+
+  const {
+    data: googleState,
+    mutate: mutateGoogleState,
+    error: googleStateError,
+  } = useSWR<GoogleState>(familyId ? "/api/google/state" : null, fetcher);
 
   const filteredEvents = useMemo(() => {
     if (!events) return [];
@@ -129,15 +174,48 @@ export default function Home() {
     return detectConflicts(mapped);
   }, [filteredEvents]);
 
+  const calendarItems = useMemo(() => {
+    const internal = filteredEvents.map<CalendarItem>((ev) => ({
+      id: ev.id,
+      title: ev.title,
+      startAt: ev.startAt,
+      endAt: ev.endAt,
+      importance: ev.importance,
+      participants: ev.participants.map((p) => p.member?.name ?? p.memberId),
+      source: "app",
+      location: ev.location ?? null,
+    }));
+    const external = (externalEvents ?? []).map<CalendarItem>((ev) => ({
+      id: `ext-${ev.id}`,
+      rawId: ev.id,
+      title: ev.title,
+      startAt: ev.startAt,
+      endAt: ev.endAt,
+      source: "google",
+      location: ev.location ?? null,
+    }));
+    return [...internal, ...external];
+  }, [filteredEvents, externalEvents]);
+
   async function handleCreateEvent() {
     if (!familyId) {
       setMessage("familyId is required");
       return;
     }
-    if (!newEvent.title || !newEvent.startAt || !newEvent.endAt) {
-      setMessage("title/start/end are required");
-      return;
+    const errors: Record<string, string> = {};
+    if (!newEvent.title) errors.title = "タイトルを入力してください";
+    if (!newEvent.startAt) errors.startAt = "開始日時を入力してください";
+    if (!newEvent.endAt) errors.endAt = "終了日時を入力してください";
+    if (newEvent.startAt && newEvent.endAt) {
+      const start = new Date(newEvent.startAt);
+      const end = new Date(newEvent.endAt);
+      if (end <= start) {
+        errors.endAt = "終了日時は開始より後にしてください";
+      }
     }
+    setEventErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     try {
       await fetch("/api/events", {
         method: "POST",
@@ -155,15 +233,18 @@ export default function Home() {
         importance: Importance.must,
         participantIds: [],
       });
+      setMessage("イベントを追加しました");
       await mutateEvents();
-      setMessage("Event created");
     } catch (e) {
       setMessage((e as Error).message);
     }
   }
 
-  async function handleAddTask(eventId: string, title: string) {
-    if (!familyId || !title) return;
+  async function handleAddTask(
+    eventId: string,
+    task: { title: string; dueDate?: string; assigneeId?: string },
+  ) {
+    if (!familyId || !task.title) return;
     try {
       await fetch("/api/events/" + eventId + "/tasks", {
         method: "POST",
@@ -171,7 +252,7 @@ export default function Home() {
           "Content-Type": "application/json",
           "x-family-id": familyId,
         },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify(task),
       });
       await mutateEvents();
     } catch (e) {
@@ -198,6 +279,7 @@ export default function Home() {
 
   async function handleDeleteTask(eventId: string, taskId: string) {
     if (!familyId) return;
+    if (!window.confirm("タスクを削除しますか？")) return;
     try {
       await fetch(`/api/events/${eventId}/tasks`, {
         method: "DELETE",
@@ -213,7 +295,7 @@ export default function Home() {
     }
   }
 
-  async function handleAddMember(name: string, role: "parent" | "child", grade?: string) {
+  async function handleAddMember(name: string, role: Role, grade?: string) {
     if (!familyId || !name) return;
     try {
       await fetch("/api/members", {
@@ -222,6 +304,36 @@ export default function Home() {
         body: JSON.stringify({ name, role, grade }),
       });
       await mutateMembers();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleUpdateMember(member: Member) {
+    if (!familyId) return;
+    try {
+      await fetch("/api/members", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-family-id": familyId },
+        body: JSON.stringify(member),
+      });
+      await mutateMembers();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleDeleteMember(memberId: string) {
+    if (!familyId) return;
+    if (!window.confirm("メンバーを削除し、担当タスクを未割当に戻しますか？")) return;
+    try {
+      await fetch("/api/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "x-family-id": familyId },
+        body: JSON.stringify({ id: memberId }),
+      });
+      await mutateMembers();
+      await mutateEvents();
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -241,32 +353,81 @@ export default function Home() {
     }
   }
 
+  async function handleCreateFamily() {
+    if (!newFamilyName.trim()) {
+      setMessage("family名を入力してください");
+      return;
+    }
+    try {
+      const res = await fetch("/api/families", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newFamilyName.trim() }),
+      });
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      const data = (await res.json()) as { id: string };
+      setFamilyId(data.id);
+      setMessage("familyを作成し選択しました");
+      setNewFamilyName("");
+      await mutateMembers();
+      await mutateEvents();
+      await mutateExternal();
+      await mutateGoogleState();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  const groupedEvents = useMemo(
+    () => groupEventsByDay(filteredEvents, viewMode),
+    [filteredEvents, viewMode],
+  );
+  const conflictEvents = useMemo(
+    () => filteredEvents.filter((ev) => conflictIds.has(ev.id)),
+    [filteredEvents, conflictIds],
+  );
+
+  function handleSelectCalendar(item: CalendarItem) {
+    if (item.source === "app") {
+      const ev = filteredEvents.find((e) => e.id === item.id);
+      if (ev) setSelectedEvent({ kind: "app", event: ev });
+    } else {
+      const targetId = item.rawId ?? item.id.replace("ext-", "");
+      const ev = externalEvents?.find((e) => e.id === targetId);
+      if (ev) setSelectedEvent({ kind: "google", event: ev });
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white text-black">
       <header className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Family Exam Planner</h1>
-          <p className="text-sm text-zinc-600">
-            イベント、タスク、Google予定を家族で一元管理
-          </p>
+          <p className="text-sm text-zinc-600">イベント、タスク、Google予定を家族で一元管理</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            className="rounded border border-zinc-300 px-3 py-2 text-sm"
-            placeholder="familyId"
-            value={familyId}
-            onChange={(e) => setFamilyId(e.target.value)}
-          />
-          <button
-            onClick={() => {
-              mutateMembers();
-              mutateEvents();
-              mutateExternal();
-            }}
-            className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            Sync data
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              className="rounded border border-zinc-300 px-3 py-2 text-sm"
+              placeholder="familyId"
+              value={familyId}
+              onChange={(e) => setFamilyId(e.target.value)}
+            />
+            <button
+              onClick={() => {
+                mutateMembers();
+                mutateEvents();
+                mutateExternal();
+                mutateGoogleState();
+              }}
+              className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              disabled={!familyId}
+            >
+              Sync data
+            </button>
+          </div>
         </div>
       </header>
 
@@ -274,29 +435,150 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-6 pb-2 text-sm text-red-600">{message}</div>
       )}
 
-      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-6 pb-12 lg:grid-cols-3">
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm lg:col-span-2">
+      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-6 pb-12">
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold">FamilyとGoogle連携状態</h2>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 text-sm">
+              <div className="rounded border border-zinc-200 p-3">
+                <div className="text-xs text-zinc-500">現在のfamilyId</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-mono text-sm">{familyId || "未選択"}</div>
+                  {familyId && (
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(familyId)}
+                      className="rounded border border-zinc-300 px-2 py-1 text-[11px]"
+                    >
+                      copy
+                    </button>
+                  )}
+                  {familyId && (
+                    <button
+                      onClick={() => {
+                        setFamilyId("");
+                        setSelectedEvent(null);
+                      }}
+                      className="rounded border border-zinc-300 px-2 py-1 text-[11px]"
+                    >
+                      クリア
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="新規family名"
+                  value={newFamilyName}
+                  onChange={(e) => setNewFamilyName(e.target.value)}
+                />
+                <button
+                  onClick={handleCreateFamily}
+                  className="rounded bg-emerald-600 px-3 py-2 text-white"
+                >
+                  作成して選択
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded px-2 py-1 text-xs font-semibold ${
+                    googleState?.connected ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-700"
+                  }`}
+                >
+                  {googleState?.connected ? "Google連携済" : "未連携"}
+                </span>
+                {googleState?.expired && (
+                  <span className="rounded bg-red-100 px-2 py-1 text-[11px] text-red-700">トークン期限切れ</span>
+                )}
+                {googleState?.hasRefreshToken && (
+                  <span className="rounded bg-blue-100 px-2 py-1 text-[11px] text-blue-700">
+                    refresh token 保持
+                  </span>
+                )}
+              </div>
+              {googleStateError && (
+                <div className="text-xs text-red-600">
+                  Google状態取得エラー: {(googleStateError as Error).message}
+                </div>
+              )}
+              <div className="text-xs text-zinc-600">
+                最終同期:{" "}
+                {googleState?.lastSyncedAt
+                  ? new Date(googleState.lastSyncedAt).toLocaleString()
+                  : "未取得"}
+              </div>
+              <div className="text-xs text-zinc-600">
+                有効期限: {googleState?.expiresAt ? new Date(googleState.expiresAt).toLocaleString() : "不明"}
+              </div>
+              <div className="text-xs text-zinc-600">
+                取得済み予定: {googleState?.externalEventsCount ?? 0} 件
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      await mutateExternal();
+                      await mutateGoogleState();
+                      setMessage("");
+                    } catch (err) {
+                      setMessage(`Google予定取得に失敗: ${(err as Error).message}`);
+                    }
+                  }}
+                  disabled={!familyId || loadingExternal}
+                  className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  {loadingExternal ? "取得中..." : "外部イベント再取得"}
+                </button>
+                <a
+                  className="text-xs text-blue-600 underline"
+                  href={`/api/google/auth?familyId=${familyId}`}
+                >
+                  Google連携を開始/再認可する
+                </a>
+                {externalError && (
+                  <div className="text-xs text-red-600">
+                    外部イベント取得エラー: {(externalError as Error).message}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
           <h2 className="text-lg font-semibold">イベント作成</h2>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <input
-              className="rounded border border-zinc-300 px-3 py-2 text-sm"
-              placeholder="タイトル"
-              value={newEvent.title}
-              onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-            />
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-1">
               <input
-                type="datetime-local"
-                className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm"
-                value={newEvent.startAt}
-                onChange={(e) => setNewEvent({ ...newEvent, startAt: e.target.value })}
+                className="rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="タイトル"
+                value={newEvent.title}
+                onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
               />
-              <input
-                type="datetime-local"
-                className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm"
-                value={newEvent.endAt}
-                onChange={(e) => setNewEvent({ ...newEvent, endAt: e.target.value })}
-              />
+              {eventErrors.title && <span className="text-xs text-red-600">{eventErrors.title}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex gap-2">
+                <input
+                  type="datetime-local"
+                  className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm"
+                  value={newEvent.startAt}
+                  onChange={(e) => setNewEvent({ ...newEvent, startAt: e.target.value })}
+                />
+                <input
+                  type="datetime-local"
+                  className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm"
+                  value={newEvent.endAt}
+                  onChange={(e) => setNewEvent({ ...newEvent, endAt: e.target.value })}
+                />
+              </div>
+              {(eventErrors.startAt || eventErrors.endAt) && (
+                <span className="text-xs text-red-600">
+                  {eventErrors.startAt ?? eventErrors.endAt}
+                </span>
+              )}
             </div>
             <select
               className="rounded border border-zinc-300 px-3 py-2 text-sm"
@@ -312,9 +594,7 @@ export default function Home() {
             <select
               className="rounded border border-zinc-300 px-3 py-2 text-sm"
               value={newEvent.importance}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, importance: e.target.value as Importance })
-              }
+              onChange={(e) => setNewEvent({ ...newEvent, importance: e.target.value as Importance })}
             >
               {Object.values(Importance).map((v) => (
                 <option key={v} value={v}>
@@ -355,51 +635,9 @@ export default function Home() {
         </section>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold">メンバー追加</h2>
-          <MemberForm onAdd={handleAddMember} />
-          <div className="mt-3 space-y-1 text-sm">
-            {(members ?? []).map((m) => (
-              <div key={m.id} className="rounded border border-zinc-200 p-2">
-                {m.name} <span className="text-xs text-zinc-500">({m.role})</span>{" "}
-                {m.grade && <span className="text-xs text-zinc-500">/ {m.grade}</span>}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold">Google予定の読み取り</h2>
-          <p className="mt-1 text-sm text-zinc-600">連携後に /api/google/events を呼び出します。</p>
-          <button
-            onClick={() => mutateExternal()}
-            disabled={!familyId || loadingExternal}
-            className="mt-3 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {loadingExternal ? "取得中..." : "外部イベント再取得"}
-          </button>
-          <a
-            className="mt-2 inline-block text-xs text-blue-600 underline"
-            href={`/api/google/auth?familyId=${familyId}`}
-          >
-            Google連携を開始/再認可する
-          </a>
-          <div className="mt-3 space-y-2 text-sm">
-            {(externalEvents ?? []).map((ev) => (
-              <div key={ev.id} className="rounded border border-zinc-200 p-2">
-                <div className="font-medium">{ev.title}</div>
-                <div className="text-xs text-zinc-600">
-                  {new Date(ev.startAt).toLocaleString()} - {new Date(ev.endAt).toLocaleString()}
-                </div>
-                <div className="text-xs text-blue-600">Google</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="lg:col-span-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-semibold">イベント一覧</h2>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">カレンダー</h2>
+            <div className="flex gap-2 text-sm">
               <select
                 className="rounded border border-zinc-300 px-2 py-1"
                 value={viewMode}
@@ -423,7 +661,7 @@ export default function Home() {
               <select
                 className="rounded border border-zinc-300 px-2 py-1"
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value as FilterType)}
+                onChange={(e) => setFilterType(e.target.value as EventType | "all")}
               >
                 <option value="all">全タイプ</option>
                 {Object.values(EventType).map((t) => (
@@ -434,8 +672,43 @@ export default function Home() {
               </select>
             </div>
           </div>
+
+          {viewMode === "week" ? (
+            <WeekCalendar items={calendarItems} conflictIds={conflictIds} onSelect={handleSelectCalendar} />
+          ) : (
+            <MonthCalendar items={calendarItems} conflictIds={conflictIds} onSelect={handleSelectCalendar} />
+          )}
+          {selectedEvent && (
+            <SelectedEventDetail
+              selected={selectedEvent}
+              members={members ?? []}
+              conflicted={selectedEvent.kind === "app" ? conflictIds.has(selectedEvent.event.id) : false}
+              onClose={() => setSelectedEvent(null)}
+            />
+          )}
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold">メンバー管理</h2>
+          <MemberForm onAdd={handleAddMember} />
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {(members ?? []).map((m) => (
+              <EditableMemberCard
+                key={m.id}
+                member={m}
+                onSave={handleUpdateMember}
+                onDelete={handleDeleteMember}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-semibold">イベント & タスク</h2>
+          </div>
           <div className="mt-3 space-y-3">
-            {groupEventsByDay(filteredEvents, viewMode).map(({ label, events: dayEvents }) => (
+            {groupedEvents.map(({ label, events: dayEvents }) => (
               <div key={label}>
                 <div className="text-sm font-semibold text-zinc-700">{label}</div>
                 <div className="mt-2 space-y-2">
@@ -453,32 +726,56 @@ export default function Home() {
                               {typeLabel[ev.type]} / {importanceLabel[ev.importance]}
                             </span>
                           </div>
-                          {conflicted && <span className="text-xs font-semibold text-red-600">WARN conflict</span>}
+                          {conflicted && (
+                            <span className="text-xs font-semibold text-red-600">WARN conflict</span>
+                          )}
                         </div>
                         <div className="text-xs text-zinc-600">
-                          {new Date(ev.startAt).toLocaleString()} - {new Date(ev.endAt).toLocaleString()}
+                          {formatDateTime(ev.startAt)} - {formatDateTime(ev.endAt)}
                         </div>
                         <div className="text-xs text-zinc-700">
                           参加者: {ev.participants.map((p) => p.member?.name ?? p.memberId).join(", ")}
                         </div>
                         <TaskList
                           tasks={ev.tasks}
-                          onAdd={(title) => handleAddTask(ev.id, title)}
+                          members={members ?? []}
+                          onAdd={(task) => handleAddTask(ev.id, task)}
                           onUpdate={(task, updates) => handleUpdateTask(ev.id, task, updates)}
                           onDelete={(taskId) => handleDeleteTask(ev.id, taskId)}
                         />
-                        <NotesSection
-                          eventId={ev.id}
-                          notes={ev.notes}
-                          onAdd={handleAddNote}
-                        />
+                        <NotesSection eventId={ev.id} notes={ev.notes} onAdd={handleAddNote} />
                       </div>
                     );
                   })}
                 </div>
               </div>
             ))}
-            {filteredEvents.length === 0 && <div className="text-sm text-zinc-500">該当するイベントがありません</div>}
+            {filteredEvents.length === 0 && (
+              <div className="text-sm text-zinc-500">該当するイベントがありません</div>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold">コンフリクト一覧（must同士）</h2>
+          <div className="mt-2 space-y-2 text-sm">
+            {conflictEvents.map((ev) => (
+              <div key={ev.id} className="rounded border border-red-300 bg-red-50 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold">{ev.title}</div>
+                  <span className="rounded bg-red-100 px-2 py-0.5 text-[11px] text-red-700">conflict</span>
+                </div>
+                <div className="text-xs text-zinc-700">
+                  {formatDateTime(ev.startAt)} - {formatDateTime(ev.endAt)}
+                </div>
+                <div className="text-xs text-zinc-700">
+                  参加者: {ev.participants.map((p) => p.member?.name ?? p.memberId).join(", ")}
+                </div>
+              </div>
+            ))}
+            {conflictEvents.length === 0 && (
+              <div className="text-xs text-zinc-500">mustイベントの衝突はありません</div>
+            )}
           </div>
         </section>
 
@@ -488,7 +785,7 @@ export default function Home() {
             {(members ?? [])
               .filter((m) => m.role === "child")
               .map((child) => {
-                const childEvents = (filteredEvents ?? []).filter((ev) =>
+                const childEvents = filteredEvents.filter((ev) =>
                   ev.participants.some((p) => p.memberId === child.id),
                 );
                 const childTasks = childEvents.flatMap((ev) => ev.tasks);
@@ -509,92 +806,24 @@ export default function Home() {
   );
 }
 
-function TaskList({
-  tasks,
-  onAdd,
-  onUpdate,
-  onDelete,
-}: {
-  tasks: Task[];
-  onAdd: (title: string) => void;
-  onUpdate: (task: Task, updates: Partial<Task>) => void;
-  onDelete: (taskId: string) => void;
-}) {
-  const [title, setTitle] = useState("");
-  return (
-    <div className="mt-2 space-y-1">
-      <div className="text-xs font-semibold text-zinc-700">タスク</div>
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs"
-          placeholder="新規タスク"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <button
-          onClick={() => {
-            onAdd(title);
-            setTitle("");
-          }}
-          className="rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-white"
-        >
-          追加
-        </button>
-      </div>
-      <ul className="space-y-1 text-xs">
-        {tasks.map((t) => (
-          <li key={t.id} className="flex items-center justify-between rounded border border-zinc-200 px-2 py-1">
-            <span className="flex flex-col">
-              <span className="font-medium">{t.title}</span>
-              <span className="text-zinc-500">
-                {t.status} {t.dueDate && ` / ${new Date(t.dueDate).toLocaleDateString()}`}
-              </span>
-            </span>
-            <div className="flex items-center gap-1">
-              <select
-                className="rounded border border-zinc-300 px-1 py-0.5"
-                value={t.status}
-                onChange={(e) => onUpdate(t, { status: e.target.value as TaskStatus })}
-              >
-                {Object.values(TaskStatus).map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => onDelete(t.id)}
-                className="rounded bg-red-500 px-2 py-1 text-white"
-                aria-label="delete task"
-              >
-                削除
-              </button>
-            </div>
-          </li>
-        ))}
-        {tasks.length === 0 && <li className="text-zinc-500">タスクなし</li>}
-      </ul>
-    </div>
-  );
-}
-
-function MemberForm({ onAdd }: { onAdd: (name: string, role: "parent" | "child", grade?: string) => void }) {
+function MemberForm({ onAdd }: { onAdd: (name: string, role: Role, grade?: string) => void }) {
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"parent" | "child">("parent");
+  const [role, setRole] = useState<Role>("parent");
   const [grade, setGrade] = useState("");
+  const [error, setError] = useState("");
   return (
     <div className="mt-2 flex flex-col gap-2 text-sm">
-      <input
-        className="rounded border border-zinc-300 px-3 py-2 text-sm"
-        placeholder="名前"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        <input
+          className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm"
+          placeholder="名前"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
         <select
           className="rounded border border-zinc-300 px-3 py-2 text-sm"
           value={role}
-          onChange={(e) => setRole(e.target.value as "parent" | "child")}
+          onChange={(e) => setRole(e.target.value as Role)}
         >
           <option value="parent">parent</option>
           <option value="child">child</option>
@@ -605,16 +834,85 @@ function MemberForm({ onAdd }: { onAdd: (name: string, role: "parent" | "child",
           value={grade}
           onChange={(e) => setGrade(e.target.value)}
         />
+        <button
+          onClick={() => {
+            if (!name.trim()) {
+              setError("名前を入力してください");
+              return;
+            }
+            onAdd(name, role, grade || undefined);
+            setName("");
+            setError("");
+          }}
+          className="rounded bg-emerald-600 px-3 py-2 text-white"
+        >
+          追加
+        </button>
       </div>
-      <button
-        onClick={() => {
-          onAdd(name, role, grade || undefined);
-          setName("");
-        }}
-        className="self-start rounded bg-emerald-600 px-3 py-1.5 text-white"
-      >
-        追加
-      </button>
+      {error && <div className="text-xs text-red-600">{error}</div>}
+    </div>
+  );
+}
+
+function EditableMemberCard({
+  member,
+  onSave,
+  onDelete,
+}: {
+  member: Member;
+  onSave: (member: Member) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [draft, setDraft] = useState<Member>(member);
+  const [error, setError] = useState("");
+  useEffect(() => setDraft(member), [member]);
+  return (
+    <div className="rounded border border-zinc-200 p-3 text-sm">
+      <div className="flex flex-col gap-2">
+        <input
+          className="rounded border border-zinc-300 px-2 py-1"
+          value={draft.name}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+        />
+        <div className="flex gap-2">
+          <select
+            className="rounded border border-zinc-300 px-2 py-1"
+            value={draft.role}
+            onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })}
+          >
+            <option value="parent">parent</option>
+            <option value="child">child</option>
+          </select>
+          <input
+            className="flex-1 rounded border border-zinc-300 px-2 py-1"
+            placeholder="学年 (任意)"
+            value={draft.grade ?? ""}
+            onChange={(e) => setDraft({ ...draft, grade: e.target.value })}
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              if (!draft.name.trim()) {
+                setError("名前を入力してください");
+                return;
+              }
+              onSave(draft);
+              setError("");
+            }}
+            className="rounded bg-blue-600 px-3 py-1 text-white"
+          >
+            保存
+          </button>
+          <button
+            onClick={() => onDelete(member.id)}
+            className="rounded border border-red-500 px-3 py-1 text-red-600"
+          >
+            削除
+          </button>
+        </div>
+        {error && <div className="text-xs text-red-600">{error}</div>}
+      </div>
     </div>
   );
 }
@@ -662,16 +960,174 @@ function NotesSection({
   );
 }
 
+function WeekCalendar({
+  items,
+  conflictIds,
+  onSelect,
+}: {
+  items: CalendarItem[];
+  conflictIds: Set<string>;
+  onSelect?: (item: CalendarItem) => void;
+}) {
+  const startHour = 6;
+  const endHour = 22;
+  const start = startOfWeekMonday(new Date());
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const containerHeight = (endHour - startHour) * 60;
+
+  return (
+    <div className="mt-3">
+      <div className="grid grid-cols-[80px_repeat(7,1fr)] gap-2 text-xs font-semibold text-zinc-700">
+        <div />
+        {days.map((d) => (
+          <div key={d.toISOString()} className="text-center">
+            {formatWeekday(d)} <span className="text-zinc-500">{formatMonthDay(d)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-[80px_repeat(7,1fr)] gap-2">
+        <div className="flex flex-col text-[10px] text-zinc-500">
+          {Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i).map((h) => (
+            <div key={h} className="h-[60px] border-t border-zinc-200">
+              {h}:00
+            </div>
+          ))}
+        </div>
+        {days.map((day) => (
+          <div
+            key={day.toISOString()}
+            className="relative h-[960px] rounded border border-zinc-200 bg-zinc-50"
+          >
+            {items
+              .filter((ev) => isSameDay(new Date(ev.startAt), day))
+              .map((ev) => {
+                const startDate = new Date(ev.startAt);
+                const endDate = new Date(ev.endAt);
+                const topMinutes = Math.max(
+                  0,
+                  (startDate.getHours() - startHour) * 60 + startDate.getMinutes(),
+                );
+                const duration = Math.max(
+                  30,
+                  (endDate.getTime() - startDate.getTime()) / 60000,
+                );
+                const top = (topMinutes / (endHour - startHour) / 60) * containerHeight;
+                const height = (duration / (endHour - startHour) / 60) * containerHeight;
+                const isConflict = ev.source === "app" && conflictIds.has(ev.id);
+                return (
+                  <div
+                    key={ev.id}
+                    className={`absolute left-1 right-1 overflow-hidden rounded border text-xs shadow-sm ${
+                      ev.source === "google" ? "bg-blue-100 border-blue-200" : "bg-white border-zinc-200"
+                    } ${isConflict ? "border-red-500" : ""}`}
+                    style={{ top, height }}
+                    onClick={() => onSelect?.(ev)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelect?.(ev);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center justify-between px-2 py-1">
+                      <span className="font-semibold">{ev.title}</span>
+                      <span className="text-[10px] text-zinc-500">
+                        {ev.source === "google" ? "Google" : "App"}
+                      </span>
+                    </div>
+                    <div className="px-2 pb-2 text-[11px] text-zinc-600">
+                      {formatTime(startDate)} - {formatTime(endDate)}
+                      {ev.participants && ev.participants.length > 0 && (
+                        <div className="truncate text-[10px] text-zinc-500">
+                          {ev.participants.join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MonthCalendar({
+  items,
+  conflictIds,
+  onSelect,
+}: {
+  items: CalendarItem[];
+  conflictIds: Set<string>;
+  onSelect?: (item: CalendarItem) => void;
+}) {
+  const now = new Date();
+  const start = startOfWeekMonday(new Date(now.getFullYear(), now.getMonth(), 1));
+  const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
+
+  return (
+    <div className="mt-3 grid grid-cols-7 gap-2 text-xs">
+      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+        <div key={d} className="text-center font-semibold text-zinc-700">
+          {d}
+        </div>
+      ))}
+      {days.map((day) => {
+        const dayEvents = items.filter((ev) => isSameDay(new Date(ev.startAt), day));
+        return (
+          <div
+            key={day.toISOString()}
+            className={`min-h-[120px] rounded border border-zinc-200 bg-white p-2 ${
+              day.getMonth() === now.getMonth() ? "" : "bg-zinc-50 text-zinc-400"
+            }`}
+          >
+            <div className="mb-1 text-[11px] font-semibold">{day.getDate()}</div>
+            <div className="space-y-1">
+              {dayEvents.map((ev) => {
+                const isConflict = ev.source === "app" && conflictIds.has(ev.id);
+                return (
+                  <div
+                    key={ev.id}
+                    className={`rounded px-2 py-1 text-[10px] ${
+                      ev.source === "google"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    } ${isConflict ? "border border-red-500" : ""}`}
+                    onClick={() => onSelect?.(ev)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelect?.(ev);
+                      }
+                    }}
+                  >
+                    <div className="font-semibold truncate">{ev.title}</div>
+                    <div className="text-[10px]">
+                      {formatTime(new Date(ev.startAt))} - {formatTime(new Date(ev.endAt))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function groupEventsByDay(events: Event[], mode: "week" | "month") {
   const now = new Date();
-  const start = new Date(now);
-  const end = new Date(now);
+  const start = mode === "week" ? startOfWeekMonday(now) : startOfWeekMonday(new Date(now.getFullYear(), now.getMonth(), 1));
+  const end = new Date(start);
   if (mode === "week") {
-    const day = now.getDay();
-    start.setDate(now.getDate() - day);
     end.setDate(start.getDate() + 7);
   } else {
-    start.setDate(1);
     end.setMonth(start.getMonth() + 1);
     end.setDate(0);
   }
@@ -686,4 +1142,227 @@ function groupEventsByDay(events: Event[], mode: "week" | "month") {
       grouped[key] = grouped[key] ? [...grouped[key], ev] : [ev];
     });
   return Object.entries(grouped).map(([label, evs]) => ({ label, events: evs }));
+}
+
+function startOfWeekMonday(date: Date) {
+  const d = new Date(date);
+  const day = (d.getDay() + 6) % 7; // Monday=0
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDays(date: Date, days: number) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatTime(d: Date) {
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateTime(val: string) {
+  return new Date(val).toLocaleString();
+}
+
+function formatWeekday(d: Date) {
+  return ["月", "火", "水", "木", "金", "土", "日"][(d.getDay() + 6) % 7];
+}
+
+function formatMonthDay(d: Date) {
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function SelectedEventDetail({
+  selected,
+  members,
+  conflicted,
+  onClose,
+}: {
+  selected: { kind: "app"; event: Event } | { kind: "google"; event: ExternalEvent };
+  members: Member[];
+  conflicted: boolean;
+  onClose: () => void;
+}) {
+  const isApp = selected.kind === "app";
+  const ev = selected.event as Event & ExternalEvent;
+  return (
+    <div className="mt-3 rounded border border-zinc-200 bg-zinc-50 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-base font-semibold">{ev.title}</h3>
+          <span className="rounded bg-zinc-200 px-2 py-0.5 text-[11px] text-zinc-700">
+            {isApp ? "Appイベント" : "Google予定"}
+          </span>
+          {conflicted && (
+            <span className="rounded bg-red-100 px-2 py-0.5 text-[11px] text-red-700">conflict</span>
+          )}
+          {isApp && "type" in ev && (
+            <span className="rounded bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">
+              {typeLabel[ev.type as EventType]}
+            </span>
+          )}
+        </div>
+        <button onClick={onClose} className="text-sm text-blue-600 underline">
+          閉じる
+        </button>
+      </div>
+      <div className="mt-2 text-sm text-zinc-700">
+        <div>
+          {formatDateTime(ev.startAt)} - {formatDateTime(ev.endAt)}
+        </div>
+        {"location" in ev && ev.location && <div>場所: {ev.location}</div>}
+        {"organizer" in ev && ev.organizer && <div>主催者: {ev.organizer}</div>}
+        {isApp && (
+          <>
+            <div>重要度: {importanceLabel[(ev as Event).importance as Importance]}</div>
+            <div>
+              参加者:{" "}
+              {(ev as Event).participants
+                .map((p) => p.member?.name ?? members.find((m) => m.id === p.memberId)?.name ?? p.memberId)
+                .join(", ")}
+            </div>
+            {(ev as Event).note && <div>メモ: {(ev as Event).note}</div>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TaskList({
+  tasks,
+  members,
+  onAdd,
+  onUpdate,
+  onDelete,
+}: {
+  tasks: Task[];
+  members: Member[];
+  onAdd: (task: { title: string; dueDate?: string; assigneeId?: string }) => void;
+  onUpdate: (task: Task, updates: Partial<Task>) => void;
+  onDelete: (taskId: string) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [assigneeId, setAssigneeId] = useState<string>("");
+  const [taskError, setTaskError] = useState("");
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="text-xs font-semibold text-zinc-700">タスク</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs"
+          placeholder="新規タスク"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <input
+          type="date"
+          className="rounded border border-zinc-300 px-2 py-1 text-xs"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+        />
+        <select
+          className="rounded border border-zinc-300 px-2 py-1 text-xs"
+          value={assigneeId}
+          onChange={(e) => setAssigneeId(e.target.value)}
+        >
+          <option value="">担当者なし</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => {
+            if (!title.trim()) {
+              setTaskError("タスクタイトルを入力してください");
+              return;
+            }
+            onAdd({
+              title,
+              dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+              assigneeId: assigneeId || undefined,
+            });
+            setTitle("");
+            setDueDate("");
+            setTaskError("");
+          }}
+          className="rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-white"
+        >
+          追加
+        </button>
+      </div>
+      {taskError && <div className="text-[11px] text-red-600">{taskError}</div>}
+      <ul className="space-y-1 text-xs">
+        {tasks.map((t) => (
+          <li
+            key={t.id}
+            className="flex flex-col gap-2 rounded border border-zinc-200 p-2 md:flex-row md:items-center md:justify-between"
+          >
+            <div className="flex flex-col">
+              <span className="font-medium">{t.title}</span>
+              <span className="text-zinc-500">
+                {t.status} {t.dueDate && ` / ${new Date(t.dueDate).toLocaleDateString()}`}
+              </span>
+              <span className="text-zinc-500">
+                担当:{" "}
+                {t.assigneeId ? members.find((m) => m.id === t.assigneeId)?.name ?? "未割当" : "未割当"}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              <select
+                className="rounded border border-zinc-300 px-1 py-0.5"
+                value={t.status}
+                onChange={(e) => onUpdate(t, { status: e.target.value as TaskStatus })}
+              >
+                {Object.values(TaskStatus).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                className="rounded border border-zinc-300 px-2 py-1 text-xs"
+                value={t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 10) : ""}
+                onChange={(e) =>
+                  onUpdate(t, { dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })
+                }
+              />
+              <select
+                className="rounded border border-zinc-300 px-2 py-1 text-xs"
+                value={t.assigneeId ?? ""}
+                onChange={(e) =>
+                  onUpdate(t, { assigneeId: e.target.value ? e.target.value : null })
+                }
+              >
+                <option value="">担当者なし</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => onDelete(t.id)}
+                className="rounded bg-red-500 px-2 py-1 text-white"
+                aria-label="delete task"
+              >
+                削除
+              </button>
+            </div>
+          </li>
+        ))}
+        {tasks.length === 0 && <li className="text-zinc-500">タスクなし</li>}
+      </ul>
+    </div>
+  );
 }

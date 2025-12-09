@@ -12,6 +12,18 @@ export const memberSchema = z.object({
   grade: z.string().optional(),
 });
 
+export const memberUpdateSchema = memberSchema.extend({
+  id: z.string().min(1),
+});
+
+export const memberIdSchema = z.object({
+  id: z.string().min(1),
+});
+
+export const familySchema = z.object({
+  name: z.string().min(1),
+});
+
 export const eventSchema = z
   .object({
     title: z.string().min(1),
