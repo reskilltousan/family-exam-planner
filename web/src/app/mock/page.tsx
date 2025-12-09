@@ -181,7 +181,7 @@ export default function MockPage() {
                   const isToday = d.iso === todayIso();
                   const dayEvents = groupedEvents[d.iso] ?? [];
                   return (
-                    <div key={d.iso} className="flex h-32 flex-col gap-2 border-b border-zinc-100 p-4">
+                    <div key={d.iso} className="flex h-36 flex-col gap-3 border-b border-zinc-100 p-5">
                       <div className="flex items-center gap-2">
                         <div
                           className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
@@ -260,46 +260,51 @@ export default function MockPage() {
             </button>
           </div>
           <div className="divide-y divide-zinc-100">
-            {events.map((ev) => (
-              <div key={ev.id} className="flex items-center gap-3 py-3">
-                <span className={`h-10 w-1 rounded-full ${ev.tagColor}`} />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm font-semibold text-zinc-900">{ev.title}</div>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] ${ev.tagColor}`}>{ev.tag}</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" strokeWidth={1.5} />
-                      <span>
-                        {ev.date} / {ev.timeRange}
-                      </span>
+            <div className="space-y-3">
+              {events.map((ev) => (
+                <div
+                  key={ev.id}
+                  className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                >
+                  <span className={`h-12 w-1 rounded-full ${ev.tagColor}`} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-semibold text-zinc-900">{ev.title}</div>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${ev.tagColor}`}>{ev.tag}</span>
                     </div>
-                    {ev.location && (
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
                       <div className="flex items-center gap-1">
-                        <MapPin className="h-3.5 w-3.5" strokeWidth={1.5} />
-                        <span>{ev.location}</span>
+                        <Clock className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        <span>
+                          {ev.date} / {ev.timeRange}
+                        </span>
                       </div>
-                    )}
-                    <div className="flex items-center gap-1">
-                      <User className="h-3.5 w-3.5" strokeWidth={1.5} />
-                      <span>
-                        {ev.members
-                          .map((id) => members.find((m) => m.id === id)?.name ?? id)
-                          .join(", ")}
-                      </span>
+                      {ev.location && (
+                        <div className="flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5" strokeWidth={1.5} />
+                          <span>{ev.location}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <User className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        <span>
+                          {ev.members
+                            .map((id) => members.find((m) => m.id === id)?.name ?? id)
+                            .join(", ")}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                    <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    <span>{ev.tag}</span>
+                  </div>
+                  <button className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:opacity-90">
+                    詳細
+                  </button>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-zinc-500">
-                  <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  <span>{ev.tag}</span>
-                </div>
-                <button className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:opacity-90">
-                  詳細
-                </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </Card>
       </main>
