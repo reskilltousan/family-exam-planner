@@ -108,7 +108,13 @@ async function main() {
         name: t.name,
         description: t.description,
         eventType: t.eventType,
-        tasks: { create: t.tasks },
+        tasks: {
+          create: t.tasks.map((task, idx) => ({
+            title: task.title,
+            daysBeforeEvent: task.daysBeforeEvent ?? null,
+            position: idx,
+          })),
+        },
       },
     });
     console.log("Template created:", created.id, created.name);

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const templates = await prisma.template.findMany({
     where,
-    include: { tasks: true },
+    include: { tasks: { orderBy: { position: "asc" } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -29,9 +29,17 @@ export async function POST(req: NextRequest) {
   const template = await prisma.template.create({
     data: {
       ...data,
-      tasks: tasks && tasks.length > 0 ? { create: tasks.map((t) => ({ ...t })) } : undefined,
+      tasks:
+        tasks && tasks.length > 0
+          ? {
+              create: tasks.map((t, idx) => ({
+                ...t,
+                position: t.position ?? idx,
+              })),
+            }
+          : undefined,
     },
-    include: { tasks: true },
+    include: { tasks: { orderBy: { position: "asc" } } },
   });
   return NextResponse.json(template, { status: 201 });
 }
@@ -55,9 +63,17 @@ export async function PUT(req: NextRequest) {
       where: { id },
       data: {
         ...data,
-        tasks: tasks && tasks.length > 0 ? { create: tasks.map((t) => ({ ...t })) } : undefined,
+        tasks:
+          tasks && tasks.length > 0
+            ? {
+                create: tasks.map((t, idx) => ({
+                  ...t,
+                  position: t.position ?? idx,
+                })),
+              }
+            : undefined,
       },
-      include: { tasks: true },
+      include: { tasks: { orderBy: { position: "asc" } } },
     });
     return t;
   });

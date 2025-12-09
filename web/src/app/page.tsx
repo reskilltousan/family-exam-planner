@@ -116,7 +116,7 @@ export default function Home() {
     name: string;
     description: string;
     eventType: EventType | "";
-    tasks: { title: string; daysBeforeEvent: number | null }[];
+    tasks: { title: string; daysBeforeEvent: number | null; position: number }[];
   }>({
     name: "",
     description: "",
@@ -654,8 +654,11 @@ export default function Home() {
               <div className="rounded border border-zinc-200 p-2">
                 <div className="text-xs font-semibold">タスク定義</div>
                 <div className="space-y-2">
-                  {newTemplate.tasks.map((t, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
+                  {newTemplate.tasks
+                    .slice()
+                    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+                    .map((t, idx) => (
+                    <div key={`${t.title}-${idx}`} className="flex items-center gap-2">
                       <input
                         className="flex-1 rounded border border-zinc-300 px-2 py-1 text-xs"
                         placeholder="タスク名"
@@ -681,11 +684,48 @@ export default function Home() {
                           setNewTemplate({ ...newTemplate, tasks: next });
                         }}
                       />
+                      <div className="flex items-center gap-1">
+                        <button
+                          className="rounded border border-zinc-300 px-2 py-1 text-[11px]"
+                          onClick={() => {
+                            const next = [...newTemplate.tasks];
+                            if (idx > 0) {
+                              [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                            }
+                            setNewTemplate({
+                              ...newTemplate,
+                              tasks: next.map((task, i) => ({ ...task, position: i })),
+                            });
+                          }}
+                          disabled={idx === 0}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="rounded border border-zinc-300 px-2 py-1 text-[11px]"
+                          onClick={() => {
+                            const next = [...newTemplate.tasks];
+                            if (idx < next.length - 1) {
+                              [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                            }
+                            setNewTemplate({
+                              ...newTemplate,
+                              tasks: next.map((task, i) => ({ ...task, position: i })),
+                            });
+                          }}
+                          disabled={idx === newTemplate.tasks.length - 1}
+                        >
+                          ↓
+                        </button>
+                      </div>
                       <button
                         className="rounded border border-red-400 px-2 py-1 text-[11px] text-red-600"
                         onClick={() => {
                           const next = newTemplate.tasks.filter((_, i) => i !== idx);
-                          setNewTemplate({ ...newTemplate, tasks: next });
+                          setNewTemplate({
+                            ...newTemplate,
+                            tasks: next.map((task, i) => ({ ...task, position: i })),
+                          });
                         }}
                       >
                         削除
@@ -697,7 +737,10 @@ export default function Home() {
                     onClick={() =>
                       setNewTemplate({
                         ...newTemplate,
-                        tasks: [...newTemplate.tasks, { title: "", daysBeforeEvent: null }],
+                        tasks: [
+                          ...newTemplate.tasks,
+                          { title: "", daysBeforeEvent: null, position: newTemplate.tasks.length },
+                        ],
                       })
                     }
                   >
@@ -725,40 +768,69 @@ export default function Home() {
             </div>
             <div className="space-y-2 text-sm">
               {(templates ?? []).map((t) => (
-                <div key={t.id} className="rounded border border-zinc-200 p-3">
+                    <div key={t.id} className="rounded border border-zinc-200 p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <div className="font-semibold">{t.name}</div>
-                    <button
-                      className="rounded border border-red-400 px-2 py-1 text-[11px] text-red-600"
-                      onClick={() => handleDeleteTemplate(t.id)}
-                    >
-                      削除
-                    </button>
-                    <button
-                      className="rounded border border-zinc-400 px-2 py-1 text-[11px]"
-                      onClick={() => {
-                        setEditingTemplateId(t.id);
-                        setNewTemplate({
-                          name: t.name,
-                          description: t.description ?? "",
-                          eventType: (t.eventType as EventType | "") ?? "",
-                          tasks: t.tasks.map((task) => ({
-                            title: task.title,
-                            daysBeforeEvent: task.daysBeforeEvent ?? null,
-                          })),
-                        });
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                    >
-                      編集
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        className="rounded border border-zinc-400 px-2 py-1 text-[11px]"
+                        onClick={() => {
+                          setEditingTemplateId(t.id);
+                          setNewTemplate({
+                            name: t.name,
+                            description: t.description ?? "",
+                            eventType: (t.eventType as EventType | "") ?? "",
+                            tasks: t.tasks
+                              .map((task, idx) => ({
+                                title: task.title,
+                                daysBeforeEvent: task.daysBeforeEvent ?? null,
+                                position: task.position ?? idx,
+                              }))
+                              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+                          });
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                      >
+                        編集
+                      </button>
+                      <button
+                        className="rounded border border-zinc-400 px-2 py-1 text-[11px]"
+                        onClick={() => {
+                          setEditingTemplateId(null);
+                          setNewTemplate({
+                            name: `${t.name}のコピー`,
+                            description: t.description ?? "",
+                            eventType: (t.eventType as EventType | "") ?? "",
+                            tasks: t.tasks
+                              .map((task, idx) => ({
+                                title: task.title,
+                                daysBeforeEvent: task.daysBeforeEvent ?? null,
+                                position: task.position ?? idx,
+                              }))
+                              .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+                          });
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                      >
+                        複製
+                      </button>
+                      <button
+                        className="rounded border border-red-400 px-2 py-1 text-[11px] text-red-600"
+                        onClick={() => handleDeleteTemplate(t.id)}
+                      >
+                        削除
+                      </button>
+                    </div>
                   </div>
                   <div className="text-xs text-zinc-600">
                     {t.eventType ? typeLabel[t.eventType] : "タイプ未指定"}
                   </div>
                   {t.description && <div className="text-xs text-zinc-600">{t.description}</div>}
                   <ul className="mt-1 list-disc pl-4 text-xs text-zinc-700">
-                    {t.tasks.map((task) => (
+                    {t.tasks
+                      .slice()
+                      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+                      .map((task) => (
                       <li key={task.id}>
                         {task.title}
                         {task.daysBeforeEvent != null && ` / イベント${task.daysBeforeEvent}日前`}

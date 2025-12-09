@@ -55,6 +55,7 @@ export const taskUpdateSchema = taskSchema.extend({
 export const templateTaskSchema = z.object({
   title: z.string().min(1),
   daysBeforeEvent: z.number().int().optional().nullable(),
+  position: z.number().int().optional(),
 });
 
 export const templateSchema = z.object({
