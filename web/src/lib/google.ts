@@ -1,5 +1,7 @@
 import { google } from "googleapis";
 import prisma from "@/lib/db";
+import type { OAuth2Client } from "google-auth-library";
+import type { OAuthToken } from "@prisma/client";
 
 function getOAuthClient() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -43,6 +45,44 @@ export async function exchangeCodeForTokens(code: string, familyId: string) {
   });
 }
 
+async function refreshIfNeeded(
+  familyId: string,
+  client: OAuth2Client,
+  token: OAuthToken,
+  force = false,
+) {
+  const expired = token.expiresAt ? token.expiresAt.getTime() <= Date.now() : false;
+  const shouldRefresh = (expired || force) && token.refreshToken;
+  if (!shouldRefresh) {
+    client.setCredentials({
+      access_token: token.accessToken,
+      refresh_token: token.refreshToken ?? undefined,
+      expiry_date: token.expiresAt?.getTime(),
+    });
+    return token;
+  }
+
+  const res = await client.refreshToken(token.refreshToken!);
+  const creds = res.credentials;
+  if (!creds.access_token) {
+    throw new Error("Failed to refresh Google access token");
+  }
+  const updated = await prisma.oAuthToken.update({
+    where: { familyId_provider: { familyId, provider: "google" } },
+    data: {
+      accessToken: creds.access_token,
+      refreshToken: creds.refresh_token ?? token.refreshToken,
+      expiresAt: creds.expiry_date ? new Date(creds.expiry_date) : null,
+    },
+  });
+  client.setCredentials({
+    access_token: updated.accessToken,
+    refresh_token: updated.refreshToken ?? undefined,
+    expiry_date: updated.expiresAt?.getTime(),
+  });
+  return updated;
+}
+
 export async function fetchExternalEvents(familyId: string, timeMin?: string, timeMax?: string) {
   const token = await prisma.oAuthToken.findFirst({
     where: { familyId, provider: "google" },
@@ -50,20 +90,33 @@ export async function fetchExternalEvents(familyId: string, timeMin?: string, ti
   if (!token) throw new Error("No token for family");
 
   const client = getOAuthClient();
-  client.setCredentials({
-    access_token: token.accessToken,
-    refresh_token: token.refreshToken ?? undefined,
-    expiry_date: token.expiresAt?.getTime(),
-  });
+  const usableToken = await refreshIfNeeded(familyId, client, token);
 
   const calendar = google.calendar({ version: "v3", auth: client });
-  const { data } = await calendar.events.list({
-    calendarId: "primary",
-    singleEvents: true,
-    orderBy: "startTime",
-    timeMin: timeMin ?? new Date().toISOString(),
-    timeMax: timeMax,
-  });
+
+  async function listEvents() {
+    return calendar.events.list({
+      calendarId: "primary",
+      singleEvents: true,
+      orderBy: "startTime",
+      timeMin: timeMin ?? new Date().toISOString(),
+      timeMax: timeMax,
+    });
+  }
+
+  let data;
+  try {
+    ({ data } = await listEvents());
+  } catch (err: any) {
+    const status = err?.code ?? err?.response?.status;
+    const canRetry = status === 401 || status === 403;
+    if (canRetry && usableToken.refreshToken) {
+      await refreshIfNeeded(familyId, client, usableToken, true);
+      ({ data } = await listEvents());
+    } else {
+      throw err;
+    }
+  }
 
   const items =
     data.items?.map((item) => ({
