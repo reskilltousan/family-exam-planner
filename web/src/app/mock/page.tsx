@@ -225,9 +225,12 @@ export default function MockPage() {
               {tasks.map((task) => (
                 <div
                   key={task.id}
-                  className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-white px-3 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                  className="flex items-center gap-4 rounded-2xl border border-zinc-100 bg-white px-3 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
                 >
                   <span className={`h-10 w-1 rounded-full ${statusColor(task.status)}`} />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-zinc-50 text-zinc-500">
+                    <ListTodoIcon className="h-4 w-4" />
+                  </div>
                   <div className="flex-1">
                     <div className="text-sm font-semibold text-zinc-900">{task.title}</div>
                     <div className="text-xs text-zinc-500 flex items-center gap-2">
@@ -264,9 +267,12 @@ export default function MockPage() {
               {events.map((ev) => (
                 <div
                   key={ev.id}
-                  className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                  className="flex items-center gap-4 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
                 >
                   <span className={`h-12 w-1 rounded-full ${ev.tagColor}`} />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-50 text-zinc-500">
+                    <CalendarDays className="h-5 w-5" strokeWidth={1.5} />
+                  </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-semibold text-zinc-900">{ev.title}</div>
