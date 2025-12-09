@@ -1395,7 +1395,8 @@ function EditableMemberCard({
   useEffect(() => {
     setDraft(member);
     setError("");
-  }, [member]); // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member.id]); // avoid cascading renders by keying to id
   return (
     <div className="rounded border border-zinc-200 p-3 text-sm">
       <div className="flex flex-col gap-2">
@@ -1751,7 +1752,8 @@ function SelectedEventDetail({
       note: (ev as Event).note ?? "",
       participantIds: isApp ? (ev as Event).participants.map((p) => p.memberId) : [],
     });
-  }, [ev, isApp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isApp ? (ev as Event).id : ev.id]);
 
   async function handleSave() {
     if (!isApp) return;
