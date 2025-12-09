@@ -10,6 +10,8 @@ datasource db {
 model Family {
   id        String    @id @default(cuid())
   name      String
+  email     String?
+  passwordHash String?
   members   Member[]
   events    Event[]
   externalEvents ExternalEvent[]

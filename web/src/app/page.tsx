@@ -109,6 +109,8 @@ export default function Home() {
   const [filterType, setFilterType] = useState<"all" | EventType>("all");
   const [eventErrors, setEventErrors] = useState<Record<string, string>>({});
   const [newFamilyName, setNewFamilyName] = useState("");
+  const [registerForm, setRegisterForm] = useState({ name: "", email: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [selectedEvent, setSelectedEvent] = useState<
     { kind: "app"; event: Event } | { kind: "google"; event: ExternalEvent } | null
   >(null);
@@ -427,6 +429,56 @@ export default function Home() {
     }
   }
 
+  async function handleRegister() {
+    if (!registerForm.name || !registerForm.email || !registerForm.password) {
+      setMessage("name/email/passwordを入力してください");
+      return;
+    }
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(registerForm),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { id: string; name: string; email: string };
+      setFamilyId(data.id);
+      setMessage("familyを新規登録し選択しました");
+      setRegisterForm({ name: "", email: "", password: "" });
+      await mutateMembers();
+      await mutateEvents();
+      await mutateExternal();
+      await mutateGoogleState();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleLogin() {
+    if (!loginForm.email || !loginForm.password) {
+      setMessage("email/passwordを入力してください");
+      return;
+    }
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loginForm),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { id: string; name: string; email: string };
+      setFamilyId(data.id);
+      setMessage("familyにログインし選択しました");
+      setLoginForm({ email: "", password: "" });
+      await mutateMembers();
+      await mutateEvents();
+      await mutateExternal();
+      await mutateGoogleState();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
   async function handleDeleteEvent(eventId: string) {
     if (!familyId) return;
     try {
@@ -583,6 +635,56 @@ export default function Home() {
                   className="rounded bg-emerald-600 px-3 py-2 text-white"
                 >
                   作成して選択
+                </button>
+              </div>
+              <div className="rounded border border-zinc-200 p-3 space-y-2">
+                <div className="text-xs font-semibold text-zinc-700">サインアップ</div>
+                <input
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="family名"
+                  value={registerForm.name}
+                  onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
+                />
+                <input
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="email"
+                  value={registerForm.email}
+                  onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
+                />
+                <input
+                  type="password"
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="password (6文字以上)"
+                  value={registerForm.password}
+                  onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
+                />
+                <button
+                  className="rounded bg-emerald-600 px-3 py-2 text-white"
+                  onClick={handleRegister}
+                >
+                  サインアップして選択
+                </button>
+              </div>
+              <div className="rounded border border-zinc-200 p-3 space-y-2">
+                <div className="text-xs font-semibold text-zinc-700">ログイン</div>
+                <input
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="email"
+                  value={loginForm.email}
+                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                />
+                <input
+                  type="password"
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                />
+                <button
+                  className="rounded bg-blue-600 px-3 py-2 text-white"
+                  onClick={handleLogin}
+                >
+                  ログインして選択
                 </button>
               </div>
             </div>
