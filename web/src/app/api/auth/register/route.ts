@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { registerSchema } from "@/lib/validation";
-import { hashPassword } from "@/lib/auth";
+import { hashPassword, signSession } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   const json = await req.json();
@@ -26,5 +26,14 @@ export async function POST(req: NextRequest) {
     select: { id: true, name: true, email: true },
   });
 
-  return NextResponse.json(family, { status: 201 });
+  const res = NextResponse.json(family, { status: 201 });
+  const token = signSession({ familyId: family.id });
+  res.cookies.set("session", token, {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7,
+    path: "/",
+  });
+
+  return res;
 }

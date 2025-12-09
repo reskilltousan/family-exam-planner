@@ -114,6 +114,7 @@ export default function Home() {
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerErrors, setRegisterErrors] = useState<Record<string, string>>({});
   const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
+  const [authFamily, setAuthFamily] = useState<{ id: string; name: string; email?: string } | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<
     { kind: "app"; event: Event } | { kind: "google"; event: ExternalEvent } | null
   >(null);
@@ -511,6 +512,37 @@ export default function Home() {
     }
   }
 
+  async function handleLoadFromSession() {
+    try {
+      const res = await fetch("/api/auth/me");
+      if (!res.ok) {
+        setMessage("ログイン情報がありません");
+        return;
+      }
+      const data = (await res.json()) as { id: string; name: string; email?: string };
+      setAuthFamily(data);
+      setFamilyId(data.id);
+      setMessage("Cookieからfamilyを選択しました");
+      await mutateMembers();
+      await mutateEvents();
+      await mutateExternal();
+      await mutateGoogleState();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setAuthFamily(null);
+      setFamilyId("");
+      setMessage("ログアウトしました");
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
   async function handleDeleteEvent(eventId: string) {
     if (!familyId) return;
     try {
@@ -651,6 +683,7 @@ export default function Home() {
                       onClick={() => {
                         setFamilyId("");
                         setSelectedEvent(null);
+                        setAuthFamily(null);
                       }}
                       className="rounded border border-zinc-300 px-2 py-1 text-[11px]"
                     >
@@ -700,15 +733,15 @@ export default function Home() {
               <button
                 className="rounded bg-emerald-600 px-3 py-2 text-white"
                 onClick={handleRegister}
-              >
-                サインアップして選択
+                >
+                  サインアップして選択
                 </button>
               </div>
               <div className="rounded border border-zinc-200 p-3 space-y-2">
                 <div className="text-xs font-semibold text-zinc-700">ログイン</div>
-              <input
-                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
-                placeholder="email"
+                <input
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                  placeholder="email"
                 value={loginForm.email}
                 onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
               />
@@ -721,12 +754,31 @@ export default function Home() {
                 onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
               />
               {loginErrors.password && <div className="text-xs text-red-600">{loginErrors.password}</div>}
-              <button
-                className="rounded bg-blue-600 px-3 py-2 text-white"
-                onClick={handleLogin}
-              >
-                ログインして選択
+                <button
+                  className="rounded bg-blue-600 px-3 py-2 text-white"
+                  onClick={handleLogin}
+                >
+                  ログインして選択
                 </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="rounded border border-zinc-300 px-3 py-1 text-sm"
+                    onClick={handleLoadFromSession}
+                  >
+                    Cookieから読み込む
+                  </button>
+                  <button
+                    className="rounded border border-red-400 px-3 py-1 text-sm text-red-600"
+                    onClick={handleLogout}
+                  >
+                    ログアウト
+                  </button>
+                </div>
+                {authFamily && (
+                  <div className="text-[11px] text-zinc-600">
+                    ログイン中: {authFamily.name} ({authFamily.email ?? "email未登録"})
+                  </div>
+                )}
               </div>
             </div>
             <div className="space-y-2 text-sm">

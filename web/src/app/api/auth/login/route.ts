@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { loginSchema } from "@/lib/validation";
-import { verifyPassword } from "@/lib/auth";
+import { signSession, verifyPassword } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   const json = await req.json();
@@ -20,5 +20,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "メールアドレスまたはパスワードが違います" }, { status: 401 });
   }
 
-  return NextResponse.json({ id: family.id, name: family.name, email: family.email });
+  const res = NextResponse.json({ id: family.id, name: family.name, email: family.email });
+  const token = signSession({ familyId: family.id });
+  res.cookies.set("session", token, {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 7,
+    path: "/",
+  });
+  return res;
 }
