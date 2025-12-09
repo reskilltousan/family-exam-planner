@@ -62,23 +62,57 @@ async function main() {
   console.log("Seed completed: family=%s event=%s", family.id, examEvent.id);
 
   // Templates
+  await prisma.templateTask.deleteMany({});
   await prisma.template.deleteMany({});
-  const mockTemplate = await prisma.template.create({
-    data: {
+  const templates = [
+    {
       name: "模試準備テンプレ",
       description: "申込・支払・受験票印刷・持ち物準備",
       eventType: EventType.exam,
-      tasks: {
-        create: [
-          { title: "模試申込", daysBeforeEvent: 14 },
-          { title: "受験料支払", daysBeforeEvent: 10 },
-          { title: "受験票印刷", daysBeforeEvent: 3 },
-          { title: "持ち物準備", daysBeforeEvent: 1 },
-        ],
-      },
+      tasks: [
+        { title: "模試申込", daysBeforeEvent: 14 },
+        { title: "受験料支払", daysBeforeEvent: 10 },
+        { title: "受験票印刷", daysBeforeEvent: 3 },
+        { title: "持ち物準備", daysBeforeEvent: 1 },
+      ],
     },
-  });
-  console.log("Template created:", mockTemplate.id);
+    {
+      name: "本番試験A日程テンプレ",
+      description: "出願〜受験票印刷〜前日準備",
+      eventType: EventType.exam,
+      tasks: [
+        { title: "出願登録", daysBeforeEvent: 28 },
+        { title: "受験料支払", daysBeforeEvent: 21 },
+        { title: "受験票印刷", daysBeforeEvent: 7 },
+        { title: "会場アクセス確認", daysBeforeEvent: 5 },
+        { title: "持ち物準備", daysBeforeEvent: 1 },
+      ],
+    },
+    {
+      name: "本番試験B日程テンプレ",
+      description: "A日程と同様の流れ",
+      eventType: EventType.exam,
+      tasks: [
+        { title: "出願登録", daysBeforeEvent: 28 },
+        { title: "受験料支払", daysBeforeEvent: 21 },
+        { title: "受験票印刷", daysBeforeEvent: 7 },
+        { title: "会場アクセス確認", daysBeforeEvent: 5 },
+        { title: "持ち物準備", daysBeforeEvent: 1 },
+      ],
+    },
+  ];
+
+  for (const t of templates) {
+    const created = await prisma.template.create({
+      data: {
+        name: t.name,
+        description: t.description,
+        eventType: t.eventType,
+        tasks: { create: t.tasks },
+      },
+    });
+    console.log("Template created:", created.id, created.name);
+  }
 }
 
 main()
