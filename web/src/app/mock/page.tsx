@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  CalendarDays,
-  Clock,
-  MapPin,
-  Plus,
-  Tag,
-  User,
-} from "lucide-react";
 import { useMemo } from "react";
+import { CalendarDays, Clock, MapPin, Plus, Tag, User } from "lucide-react";
 
 type Member = { id: string; name: string; color: string };
 type Event = {
@@ -85,7 +78,7 @@ export default function MockPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans">
+    <div className="min-h-screen bg-zinc-50 font-sans text-zinc-900">
       <header className="sticky top-0 z-10 border-b border-zinc-200/50 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
@@ -105,7 +98,6 @@ export default function MockPage() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-6">
-        {/* Quick actions */}
         <div className="grid gap-4 sm:grid-cols-3">
           <Card className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -151,7 +143,6 @@ export default function MockPage() {
           </Card>
         </div>
 
-        {/* Calendar + tasks */}
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           <Card className="space-y-4">
             <div className="flex items-center justify-between">
@@ -205,9 +196,7 @@ export default function MockPage() {
                             </div>
                           </div>
                         ))}
-                        {dayEvents.length === 0 && (
-                          <div className="text-[11px] text-zinc-400">イベントなし</div>
-                        )}
+                        {dayEvents.length === 0 && <div className="text-[11px] text-zinc-400">イベントなし</div>}
                       </div>
                     </div>
                   );
@@ -251,7 +240,6 @@ export default function MockPage() {
           </Card>
         </div>
 
-        {/* Event list */}
         <Card className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
