@@ -46,6 +46,7 @@ type Template = {
   description?: string | null;
   eventType?: EventType | null;
   tasks: TemplateTask[];
+  tags?: string[] | null;
 };
 
 type ExternalEvent = {
@@ -119,11 +120,13 @@ export default function Home() {
     description: string;
     eventType: EventType | "";
     tasks: { title: string; daysBeforeEvent: number | null; position: number }[];
+    tags: string;
   }>({
     name: "",
     description: "",
     eventType: "",
     tasks: [],
+    tags: "",
   });
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
@@ -172,6 +175,21 @@ export default function Home() {
     familyId ? "/api/templates" : "/api/templates",
     fetcher,
   );
+  const [templateSearch, setTemplateSearch] = useState("");
+  const filteredTemplates = useMemo(() => {
+    const keyword = templateSearch.trim().toLowerCase();
+    if (!keyword) return templates ?? [];
+    return (templates ?? []).filter((t) => {
+      const haystack = [
+        t.name ?? "",
+        t.description ?? "",
+        ...(t.tags ?? []),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }, [templates, templateSearch]);
 
   const {
     data: externalEvents,
@@ -505,6 +523,10 @@ export default function Home() {
         description: newTemplate.description || undefined,
         eventType: newTemplate.eventType || undefined,
         tasks: newTemplate.tasks.filter((t) => t.title.trim()),
+        tags: newTemplate.tags
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
       };
       const method = editingTemplateId ? "PUT" : "POST";
       const body = editingTemplateId ? { id: editingTemplateId, ...payload } : payload;
@@ -513,7 +535,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      setNewTemplate({ name: "", description: "", eventType: "", tasks: [] });
+      setNewTemplate({ name: "", description: "", eventType: "", tasks: [], tags: "" });
       setEditingTemplateId(null);
       setMessage(editingTemplateId ? "テンプレートを更新しました" : "テンプレートを作成しました");
       await mutateTemplates();
@@ -783,6 +805,12 @@ export default function Home() {
                   </option>
                 ))}
               </select>
+              <input
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                placeholder="タグ（カンマ区切り）例: 模試,準備"
+                value={newTemplate.tags}
+                onChange={(e) => setNewTemplate({ ...newTemplate, tags: e.target.value })}
+              />
               <div className="rounded border border-zinc-200 p-2">
                 <div className="text-xs font-semibold">タスク定義</div>
                 <div className="space-y-2">
@@ -891,7 +919,7 @@ export default function Home() {
                   className="rounded border border-zinc-300 px-3 py-2 text-sm"
                   onClick={() => {
                     setEditingTemplateId(null);
-                    setNewTemplate({ name: "", description: "", eventType: "", tasks: [] });
+                    setNewTemplate({ name: "", description: "", eventType: "", tasks: [], tags: "" });
                   }}
                 >
                   編集をキャンセル
@@ -899,7 +927,15 @@ export default function Home() {
               )}
             </div>
             <div className="space-y-2 text-sm">
-              {(templates ?? []).map((t) => (
+              <div className="flex flex-col gap-2 rounded border border-zinc-200 p-2">
+                <input
+                  className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                  placeholder="テンプレ検索（名前/説明/タグ）"
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                />
+              </div>
+              {filteredTemplates.map((t) => (
                     <div key={t.id} className="rounded border border-zinc-200 p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <div className="font-semibold">{t.name}</div>
@@ -907,24 +943,25 @@ export default function Home() {
                       <button
                         className="rounded border border-zinc-400 px-2 py-1 text-[11px]"
                         onClick={() => {
-                          setEditingTemplateId(t.id);
-                          setNewTemplate({
-                            name: t.name,
-                            description: t.description ?? "",
-                            eventType: (t.eventType as EventType | "") ?? "",
-                            tasks: t.tasks
+                        setEditingTemplateId(t.id);
+                        setNewTemplate({
+                          name: t.name,
+                          description: t.description ?? "",
+                          eventType: (t.eventType as EventType | "") ?? "",
+                          tasks: t.tasks
                               .map((task, idx) => ({
                                 title: task.title,
                                 daysBeforeEvent: task.daysBeforeEvent ?? null,
                                 position: task.position ?? idx,
                               }))
                               .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
-                          });
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                      >
-                        編集
-                      </button>
+                          tags: (t.tags ?? []).join(","),
+                        });
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      編集
+                    </button>
                       <button
                         className="rounded border border-zinc-400 px-2 py-1 text-[11px]"
                         onClick={() => {
@@ -940,6 +977,7 @@ export default function Home() {
                                 position: task.position ?? idx,
                               }))
                               .sort((a, b) => (a.position ?? 0) - (b.position ?? 0)),
+                            tags: (t.tags ?? []).join(","),
                           });
                           window.scrollTo({ top: 0, behavior: "smooth" });
                         }}
@@ -970,9 +1008,18 @@ export default function Home() {
                     ))}
                     {t.tasks.length === 0 && <li>タスクなし</li>}
                   </ul>
+                  {t.tags && t.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 text-[11px] text-zinc-600">
+                      {t.tags.map((tag) => (
+                        <span key={tag} className="rounded bg-zinc-100 px-2 py-0.5">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
-              {(templates ?? []).length === 0 && (
+              {filteredTemplates.length === 0 && (
                 <div className="text-xs text-zinc-500">テンプレートがありません</div>
               )}
             </div>

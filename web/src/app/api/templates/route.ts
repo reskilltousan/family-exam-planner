@@ -15,7 +15,12 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json(templates);
+  return NextResponse.json(
+    templates.map((t) => ({
+      ...t,
+      tags: t.tags ? t.tags.split(",").filter(Boolean) : [],
+    })),
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -26,9 +31,11 @@ export async function POST(req: NextRequest) {
   }
 
   const { tasks, ...data } = parsed.data;
+  const tags = parsed.data.tags?.join(",") ?? null;
   const template = await prisma.template.create({
     data: {
       ...data,
+      tags,
       tasks:
         tasks && tasks.length > 0
           ? {
@@ -41,7 +48,13 @@ export async function POST(req: NextRequest) {
     },
     include: { tasks: { orderBy: { position: "asc" } } },
   });
-  return NextResponse.json(template, { status: 201 });
+  return NextResponse.json(
+    {
+      ...template,
+      tags: template.tags ? template.tags.split(",").filter(Boolean) : [],
+    },
+    { status: 201 },
+  );
 }
 
 export async function PUT(req: NextRequest) {
@@ -51,6 +64,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const { id, tasks, ...data } = parsed.data;
+  const tags = parsed.data.tags?.join(",") ?? null;
 
   const existing = await prisma.template.findUnique({ where: { id } });
   if (!existing) {
@@ -63,6 +77,7 @@ export async function PUT(req: NextRequest) {
       where: { id },
       data: {
         ...data,
+        tags,
         tasks:
           tasks && tasks.length > 0
             ? {
@@ -77,7 +92,10 @@ export async function PUT(req: NextRequest) {
     });
     return t;
   });
-  return NextResponse.json(updated);
+  return NextResponse.json({
+    ...updated,
+    tags: updated.tags ? updated.tags.split(",").filter(Boolean) : [],
+  });
 }
 
 export async function DELETE(req: NextRequest) {

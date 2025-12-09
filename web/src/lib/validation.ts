@@ -63,6 +63,7 @@ export const templateSchema = z.object({
   description: z.string().optional(),
   eventType: z.nativeEnum(EventType).optional(),
   tasks: z.array(templateTaskSchema).optional(),
+  tags: z.array(z.string().min(1)).optional(),
 });
 
 export const templateUpdateSchema = templateSchema.extend({

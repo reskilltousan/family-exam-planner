@@ -64,37 +64,40 @@ async function main() {
   // Templates
   await prisma.templateTask.deleteMany({});
   await prisma.template.deleteMany({});
-  const templates = [
-    {
-      name: "模試準備テンプレ",
-      description: "申込・支払・受験票印刷・持ち物準備",
-      eventType: EventType.exam,
-      tasks: [
-        { title: "模試申込", daysBeforeEvent: 14 },
-        { title: "受験料支払", daysBeforeEvent: 10 },
-        { title: "受験票印刷", daysBeforeEvent: 3 },
-        { title: "持ち物準備", daysBeforeEvent: 1 },
+const templates = [
+  {
+    name: "模試準備テンプレ",
+    description: "申込・支払・受験票印刷・持ち物準備",
+    eventType: EventType.exam,
+    tags: "模試,準備,受験",
+    tasks: [
+      { title: "模試申込", daysBeforeEvent: 14 },
+      { title: "受験料支払", daysBeforeEvent: 10 },
+      { title: "受験票印刷", daysBeforeEvent: 3 },
+      { title: "持ち物準備", daysBeforeEvent: 1 },
       ],
     },
-    {
-      name: "本番試験A日程テンプレ",
-      description: "出願〜受験票印刷〜前日準備",
-      eventType: EventType.exam,
-      tasks: [
-        { title: "出願登録", daysBeforeEvent: 28 },
-        { title: "受験料支払", daysBeforeEvent: 21 },
+  {
+    name: "本番試験A日程テンプレ",
+    description: "出願〜受験票印刷〜前日準備",
+    eventType: EventType.exam,
+    tags: "本番,受験,準備",
+    tasks: [
+      { title: "出願登録", daysBeforeEvent: 28 },
+      { title: "受験料支払", daysBeforeEvent: 21 },
         { title: "受験票印刷", daysBeforeEvent: 7 },
         { title: "会場アクセス確認", daysBeforeEvent: 5 },
         { title: "持ち物準備", daysBeforeEvent: 1 },
       ],
     },
-    {
-      name: "本番試験B日程テンプレ",
-      description: "A日程と同様の流れ",
-      eventType: EventType.exam,
-      tasks: [
-        { title: "出願登録", daysBeforeEvent: 28 },
-        { title: "受験料支払", daysBeforeEvent: 21 },
+  {
+    name: "本番試験B日程テンプレ",
+    description: "A日程と同様の流れ",
+    eventType: EventType.exam,
+    tags: "本番,受験,予備日",
+    tasks: [
+      { title: "出願登録", daysBeforeEvent: 28 },
+      { title: "受験料支払", daysBeforeEvent: 21 },
         { title: "受験票印刷", daysBeforeEvent: 7 },
         { title: "会場アクセス確認", daysBeforeEvent: 5 },
         { title: "持ち物準備", daysBeforeEvent: 1 },
@@ -108,6 +111,7 @@ async function main() {
         name: t.name,
         description: t.description,
         eventType: t.eventType,
+        tags: t.tags ?? null,
         tasks: {
           create: t.tasks.map((task, idx) => ({
             title: task.title,
