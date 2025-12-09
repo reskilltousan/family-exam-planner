@@ -116,13 +116,14 @@ export default function Home() {
     name: string;
     description: string;
     eventType: EventType | "";
-    tasks: { title: string; daysBeforeEvent?: number | null }[];
+    tasks: { title: string; daysBeforeEvent: number | null }[];
   }>({
     name: "",
     description: "",
     eventType: "",
     tasks: [],
   });
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
   const [newEvent, setNewEvent] = useState({
     title: "",
@@ -165,7 +166,10 @@ export default function Home() {
     fetcher,
   );
 
-  const { data: templates } = useSWR<Template[]>(familyId ? "/api/templates" : "/api/templates", fetcher);
+  const { data: templates, mutate: mutateTemplates } = useSWR<Template[]>(
+    familyId ? "/api/templates" : "/api/templates",
+    fetcher,
+  );
 
   const {
     data: externalEvents,
@@ -414,18 +418,23 @@ export default function Home() {
       return;
     }
     try {
+      const payload = {
+        name: newTemplate.name.trim(),
+        description: newTemplate.description || undefined,
+        eventType: newTemplate.eventType || undefined,
+        tasks: newTemplate.tasks.filter((t) => t.title.trim()),
+      };
+      const method = editingTemplateId ? "PUT" : "POST";
+      const body = editingTemplateId ? { id: editingTemplateId, ...payload } : payload;
       await fetch("/api/templates", {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newTemplate.name.trim(),
-          description: newTemplate.description || undefined,
-          eventType: newTemplate.eventType || undefined,
-          tasks: newTemplate.tasks.filter((t) => t.title.trim()),
-        }),
+        body: JSON.stringify(body),
       });
       setNewTemplate({ name: "", description: "", eventType: "", tasks: [] });
-      setMessage("テンプレートを作成しました");
+      setEditingTemplateId(null);
+      setMessage(editingTemplateId ? "テンプレートを更新しました" : "テンプレートを作成しました");
+      await mutateTemplates();
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -437,6 +446,11 @@ export default function Home() {
     try {
       await fetch(`/api/templates?id=${id}`, { method: "DELETE" });
       setMessage("テンプレートを削除しました");
+      if (editingTemplateId === id) {
+        setEditingTemplateId(null);
+        setNewTemplate({ name: "", description: "", eventType: "", tasks: [] });
+      }
+      await mutateTemplates();
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -695,8 +709,19 @@ export default function Home() {
                 onClick={handleCreateTemplate}
                 className="rounded bg-emerald-600 px-3 py-2 text-white"
               >
-                テンプレートを作成
+                {editingTemplateId ? "テンプレートを更新" : "テンプレートを作成"}
               </button>
+              {editingTemplateId && (
+                <button
+                  className="rounded border border-zinc-300 px-3 py-2 text-sm"
+                  onClick={() => {
+                    setEditingTemplateId(null);
+                    setNewTemplate({ name: "", description: "", eventType: "", tasks: [] });
+                  }}
+                >
+                  編集をキャンセル
+                </button>
+              )}
             </div>
             <div className="space-y-2 text-sm">
               {(templates ?? []).map((t) => (
@@ -708,6 +733,24 @@ export default function Home() {
                       onClick={() => handleDeleteTemplate(t.id)}
                     >
                       削除
+                    </button>
+                    <button
+                      className="rounded border border-zinc-400 px-2 py-1 text-[11px]"
+                      onClick={() => {
+                        setEditingTemplateId(t.id);
+                        setNewTemplate({
+                          name: t.name,
+                          description: t.description ?? "",
+                          eventType: (t.eventType as EventType | "") ?? "",
+                          tasks: t.tasks.map((task) => ({
+                            title: task.title,
+                            daysBeforeEvent: task.daysBeforeEvent ?? null,
+                          })),
+                        });
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      編集
                     </button>
                   </div>
                   <div className="text-xs text-zinc-600">
@@ -1077,7 +1120,10 @@ function EditableMemberCard({
 }) {
   const [draft, setDraft] = useState<Member>(member);
   const [error, setError] = useState("");
-  useEffect(() => setDraft(member), [member]);
+  useEffect(() => {
+    setDraft(member);
+    setError("");
+  }, [member]); // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   return (
     <div className="rounded border border-zinc-200 p-3 text-sm">
       <div className="flex flex-col gap-2">

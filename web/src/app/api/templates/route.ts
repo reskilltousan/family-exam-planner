@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { EventType } from "@prisma/client";
 import prisma from "@/lib/db";
 import { templateSchema, templateUpdateSchema } from "@/lib/validation";
 
@@ -6,8 +7,10 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const eventType = url.searchParams.get("eventType") ?? undefined;
 
+  const where = eventType ? { eventType: eventType as EventType } : undefined;
+
   const templates = await prisma.template.findMany({
-    where: { eventType: eventType as any },
+    where,
     include: { tasks: true },
     orderBy: { createdAt: "asc" },
   });

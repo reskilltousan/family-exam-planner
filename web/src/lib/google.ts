@@ -107,8 +107,9 @@ export async function fetchExternalEvents(familyId: string, timeMin?: string, ti
   let data;
   try {
     ({ data } = await listEvents());
-  } catch (err: any) {
-    const status = err?.code ?? err?.response?.status;
+  } catch (err: unknown) {
+    const maybeErr = err as { code?: number; response?: { status?: number } };
+    const status = maybeErr?.code ?? maybeErr?.response?.status;
     const canRetry = status === 401 || status === 403;
     if (canRetry && usableToken.refreshToken) {
       await refreshIfNeeded(familyId, client, usableToken, true);
