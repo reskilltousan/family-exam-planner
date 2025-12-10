@@ -115,7 +115,10 @@ export default function MockPage() {
           onPrevWeek={() => setWeekOffset((v) => v - 1)}
           onNextWeek={() => setWeekOffset((v) => v + 1)}
           onToday={() => setWeekOffset(0)}
-          onSelectEvent={(ev) => setSelectedEvent(ev)}
+          onSelectEvent={(ev) => {
+            setSelectedTask(null);
+            setSelectedEvent(ev);
+          }}
         />
       ),
       label: "カレンダー",
@@ -125,7 +128,10 @@ export default function MockPage() {
       render: () => (
         <TaskList
           tasks={tasks}
-          onSelectTask={(t) => setSelectedTask(t)}
+          onSelectTask={(t) => {
+            setSelectedEvent(null);
+            setSelectedTask(t);
+          }}
         />
       ),
       label: "タスク",
@@ -362,6 +368,7 @@ export default function MockPage() {
         </div>
       </main>
       <DetailSheet
+        key={selectedEvent?.id ?? selectedTask?.id ?? "detail-none"}
         event={selectedEvent}
         task={selectedTask}
         members={members}
