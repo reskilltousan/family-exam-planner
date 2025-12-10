@@ -30,3 +30,6 @@
 - Next.js デフォルトの App Router 構成を採用し、TypeScript で strict に型管理。
 - next/font を使ってフォントを最適化し、ライト/ダークテーマを CSS 変数で管理。
 - React Compiler を有効化し、React 19 に最適化したビルドを前提とする。
+
+## 運用メモ
+- コミット時は、進捗ログを必ず `tasks.md` と `.sdd/specs/family-exam-planner-mvp/tasks.md` の両方に反映する（コメント指示の有無にかかわらず毎回更新）。
