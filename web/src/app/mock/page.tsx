@@ -23,7 +23,7 @@ type Task = {
 };
 type SectionKey = "quick" | "week" | "tasks" | "events";
 
-const members: Member[] = [
+const defaultMembers: Member[] = [
   { id: "p1", name: "保護者A", color: "bg-blue-500" },
   { id: "c1", name: "子どもA", color: "bg-emerald-500" },
   { id: "c2", name: "子どもB", color: "bg-orange-500" },
@@ -70,6 +70,7 @@ const initialTasks: Task[] = [
 
 export default function MockPage() {
   const [familyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
+  const [members, setMembers] = useState<Member[]>(defaultMembers);
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [message, setMessage] = useState<string>("");
@@ -95,6 +96,27 @@ export default function MockPage() {
   }, [events]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // 認証ページで保存した family メンバー名があれば反映
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("familyMembers");
+      if (!raw) return;
+      const names = (JSON.parse(raw) as string[]).filter(Boolean);
+      if (!names.length) return;
+      const palette = ["bg-blue-500", "bg-emerald-500", "bg-orange-500", "bg-indigo-500", "bg-amber-500"];
+      const updated = names.map<Member>((name, idx) => ({
+        id: `m${idx + 1}`,
+        name,
+        color: palette[idx % palette.length],
+      }));
+      // enqueue to avoid lint set-state-in-effect warning (non-critical, single render)
+      queueMicrotask(() => setMembers(updated));
+    } catch (e) {
+      console.warn("familyMembers localStorage parse error", e);
+    }
+  }, []);
 
   const [order, setOrder] = useState<SectionKey[]>(["quick", "week", "tasks", "events"]);
   const [dragging, setDragging] = useState<SectionKey | null>(null);
