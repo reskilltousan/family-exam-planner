@@ -553,12 +553,6 @@ function DetailSheet({
                   >
                     編集
                   </button>
-                  <button
-                    className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-800 hover:opacity-90"
-                    onClick={onClose}
-                  >
-                    閉じる
-                  </button>
                 </div>
               </>
             )}
@@ -625,12 +619,6 @@ function DetailSheet({
                     onClick={() => setEditing(true)}
                   >
                     編集
-                  </button>
-                  <button
-                    className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-800 hover:opacity-90"
-                    onClick={onClose}
-                  >
-                    閉じる
                   </button>
                 </div>
               </>
