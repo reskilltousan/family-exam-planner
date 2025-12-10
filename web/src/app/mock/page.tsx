@@ -135,6 +135,8 @@ export default function MockPage() {
         <WeekView
           weekDays={weekDays}
           groupedEvents={groupedEvents}
+          tasks={tasks}
+          members={members}
           weekLabel={formatWeekRange(weekDays)}
           onPrevWeek={() => setWeekOffset((v) => v - 1)}
           onNextWeek={() => setWeekOffset((v) => v + 1)}
