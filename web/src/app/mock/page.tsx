@@ -69,7 +69,7 @@ const tasks: Task[] = [
 ];
 
 export default function MockPage() {
-  const [familyId, setFamilyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
+  const [familyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [message, setMessage] = useState<string>("");
   const [createForm, setCreateForm] = useState({
@@ -91,21 +91,6 @@ export default function MockPage() {
       return acc;
     }, {});
   }, [events]);
-
-  async function handleLoadFromSession() {
-    try {
-      const res = await fetch("/api/auth/me");
-      if (!res.ok) {
-        setMessage("ログイン情報が見つかりません");
-        return;
-      }
-      const data = (await res.json()) as { id: string; name: string; email?: string };
-      setFamilyId(data.id);
-      setMessage("Cookieから family を復元しました");
-    } catch (e) {
-      setMessage((e as Error).message);
-    }
-  }
 
   const [order, setOrder] = useState<SectionKey[]>(["quick", "week", "tasks", "events"]);
   const [dragging, setDragging] = useState<SectionKey | null>(null);
@@ -211,9 +196,15 @@ export default function MockPage() {
               <div className="text-xs text-zinc-500">カードをドラッグして配置カスタム</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-zinc-600">
+          <div className="flex items-center gap-3 text-sm text-zinc-600">
             <User className="h-4 w-4" strokeWidth={1.5} />
-            <span>Demo User</span>
+            <span className="hidden sm:inline">Demo User</span>
+            <a
+              href="/auth"
+              className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+            >
+              新規作成 / ログイン
+            </a>
           </div>
         </div>
       </header>
@@ -227,39 +218,8 @@ export default function MockPage() {
           <Card className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-semibold">家族ID / Google連携前提</div>
-                <div className="text-xs text-zinc-500">familyId を指定して API 連携を有効化</div>
-              </div>
-              <User className="h-4 w-4 text-zinc-500" strokeWidth={1.5} />
-            </div>
-            <input
-              value={familyId}
-              onChange={(e) => setFamilyId(e.target.value)}
-              className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="familyId を入力"
-            />
-            <div className="flex flex-wrap gap-2 text-xs">
-              <button
-                className="rounded-full bg-zinc-900 px-3 py-1 font-semibold text-white shadow-sm hover:opacity-90"
-                onClick={handleLoadFromSession}
-              >
-                Cookieから読み込む
-              </button>
-              <a
-                className="rounded-full bg-blue-600 px-3 py-1 font-semibold text-white shadow-sm hover:opacity-90"
-                href="/auth"
-              >
-                新規作成 / ログインページへ
-              </a>
-            </div>
-            {message && <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">{message}</div>}
-          </Card>
-
-          <Card className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
                 <div className="text-sm font-semibold">イベント追加（API + ローカルに反映）</div>
-                <div className="text-xs text-zinc-500">タイトル・日時を入力して登録</div>
+                <div className="text-xs text-zinc-500">familyId が設定されている場合は /api/events にPOSTします</div>
               </div>
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                 <Plus className="h-4 w-4" strokeWidth={1.5} />
@@ -333,6 +293,7 @@ export default function MockPage() {
                 </button>
               </div>
             </div>
+            {message && <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">{message}</div>}
           </Card>
         </div>
 
