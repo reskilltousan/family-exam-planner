@@ -112,7 +112,7 @@ export default function AuthPage() {
             </div>
             <div>
               <div className="text-lg font-bold tracking-tight">Family Planner Auth</div>
-              <div className="text-xs text-zinc-500">新規作成 / ログイン</div>
+              <div className="text-xs text-zinc-500">メール登録 / サインイン</div>
             </div>
           </div>
           <Link

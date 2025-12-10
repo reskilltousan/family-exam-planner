@@ -1,6 +1,7 @@
 # 実装タスクリスト
 
 - Phase 1 (MVP): セクション1〜4
+- サインイン専用ページ `/signin` を追加（Google/Apple/GitHub ボタン＋メールサインイン導線）。/auth はメール登録・ログインフォームを復活（メンバー入力含む）。
 - /auth に外部ログイン（Google/Apple/GitHub）を残しつつ、メール/パスワード＋メンバー登録フォームを復活。API失敗時はローカルfamilyIdをフォールバック。
 - next-auth で Google/Apple/GitHub 外部ログインに移行 (/api/auth/[...nextauth], /auth はプロバイダボタン表示)。
 - ウィークビューのタスクもクリックで詳細モーダルを開けるよう修正。
