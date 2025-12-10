@@ -19,7 +19,7 @@ export default function AuthPage() {
       return;
     }
     setLoading(true);
-    setMessage("");
+    setMessage("作成中...");
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -38,7 +38,16 @@ export default function AuthPage() {
       setMessage("familyを作成しました。トップに戻ります。");
       router.push("/");
     } catch (e) {
-      setMessage((e as Error).message);
+      // デモ用フォールバック: API失敗時でもローカルに familyId をセット
+      const fallbackId = `demo-${Date.now()}`;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("familyId", fallbackId);
+        const memberNames = memberInputs.map((n) => n.trim()).filter(Boolean);
+        if (memberNames.length) {
+          window.localStorage.setItem("familyMembers", JSON.stringify(memberNames));
+        }
+      }
+      setMessage(`API登録に失敗しましたが、ローカルで familyId (${fallbackId}) を設定しました: ${(e as Error).message}`);
     } finally {
       setLoading(false);
     }
