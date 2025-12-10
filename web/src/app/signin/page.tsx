@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { signIn } from "next-auth/react";
-import { Apple, Github, Google } from "lucide-react";
+import { Apple, Github, LogIn } from "lucide-react";
 
 export default function SignInPage() {
   return (
@@ -14,7 +14,7 @@ export default function SignInPage() {
 
       <main className="mx-auto flex max-w-md flex-col gap-4 px-6 pb-12">
         <AuthButton
-          icon={<Google className="h-5 w-5" strokeWidth={1.5} />}
+          icon={<LogIn className="h-5 w-5" strokeWidth={1.5} />}
           label="Google で続行"
           onClick={() => signIn("google", { callbackUrl: "/" })}
           tone="google"
