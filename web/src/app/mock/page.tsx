@@ -604,11 +604,18 @@ function DetailSheet({
                     value={formTask.due}
                     onChange={(e) => setFormTask({ ...formTask, due: e.target.value })}
                   />
-                  <input
+                  <select
                     className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    value={formTask.assignee}
+                    value={formTask.assignee ?? ""}
                     onChange={(e) => setFormTask({ ...formTask, assignee: e.target.value })}
-                  />
+                  >
+                    <option value="">担当なし</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.name}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <select
                   className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
