@@ -29,7 +29,7 @@ const members: Member[] = [
   { id: "c2", name: "子どもB", color: "bg-orange-500" },
 ];
 
-const events: Event[] = [
+const initialEvents: Event[] = [
   {
     id: "e1",
     title: "模試 (英語)",
@@ -69,6 +69,20 @@ const tasks: Task[] = [
 ];
 
 export default function MockPage() {
+  const [familyId, setFamilyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
+  const [events, setEvents] = useState<Event[]>(initialEvents);
+  const [message, setMessage] = useState<string>("");
+  const [createForm, setCreateForm] = useState({
+    title: "",
+    date: todayIso(),
+    start: "09:00",
+    end: "10:00",
+    location: "",
+    memberIds: [] as string[],
+    tag: "模試",
+    tagColor: "bg-blue-100 text-blue-700",
+  });
+
   const weekDays = useMemo(() => buildWeekDays(todayIso()), []);
   const groupedEvents = useMemo(() => {
     return events.reduce<Record<string, Event[]>>((acc, ev) => {
@@ -76,7 +90,7 @@ export default function MockPage() {
       acc[ev.date].push(ev);
       return acc;
     }, {});
-  }, []);
+  }, [events]);
 
   const [order, setOrder] = useState<SectionKey[]>(["quick", "week", "tasks", "events"]);
   const [dragging, setDragging] = useState<SectionKey | null>(null);
@@ -89,8 +103,72 @@ export default function MockPage() {
     quick: { span: "full", render: () => <QuickActions />, label: "クイックアクション" },
     week: { span: "full", render: () => <WeekView weekDays={weekDays} groupedEvents={groupedEvents} />, label: "カレンダー" },
     tasks: { span: "half", render: () => <TaskList />, label: "タスク" },
-    events: { span: "full", render: () => <EventList />, label: "イベント一覧" },
+    events: { span: "full", render: () => <EventList events={events} />, label: "イベント一覧" },
   };
+
+  async function handleCreateEvent() {
+    setMessage("");
+    if (!createForm.title.trim()) {
+      setMessage("タイトルを入力してください");
+      return;
+    }
+    if (!createForm.date || !createForm.start || !createForm.end) {
+      setMessage("日付と時間を入力してください");
+      return;
+    }
+    const start = new Date(`${createForm.date}T${createForm.start}:00`);
+    const end = new Date(`${createForm.date}T${createForm.end}:00`);
+    if (end <= start) {
+      setMessage("終了時間は開始より後にしてください");
+      return;
+    }
+
+    const payload = {
+      title: createForm.title.trim(),
+      startAt: start.toISOString(),
+      endAt: end.toISOString(),
+      type: "exam",
+      importance: "must",
+      participantIds: createForm.memberIds,
+      location: createForm.location || null,
+    };
+
+    try {
+      if (!familyId) {
+        setMessage("familyId が未設定です（ヘッダー入力欄を確認してください）");
+      } else {
+        await fetch("/api/events", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-family-id": familyId,
+          },
+          body: JSON.stringify(payload),
+        });
+        setMessage("イベントを登録しました（API送信済み）");
+      }
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+
+    const newEvent: Event = {
+      id: crypto.randomUUID(),
+      title: createForm.title.trim(),
+      date: createForm.date,
+      timeRange: `${createForm.start} - ${createForm.end}`,
+      location: createForm.location || undefined,
+      members: createForm.memberIds,
+      tag: createForm.tag,
+      tagColor: createForm.tagColor,
+    };
+    setEvents((prev) => [...prev, newEvent]);
+    setCreateForm((prev) => ({
+      ...prev,
+      title: "",
+      location: "",
+      memberIds: [],
+    }));
+  }
 
   const handleDrop = (source: SectionKey, target: SectionKey) => {
     if (source === target) return;
@@ -128,6 +206,105 @@ export default function MockPage() {
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-6">
         <div className="rounded-2xl border border-zinc-100 bg-white px-4 py-3 text-sm text-zinc-600 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
           カードをドラッグ＆ドロップして、お好きな配置に並べ替えできます。
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">家族ID / Google連携前提</div>
+                <div className="text-xs text-zinc-500">familyId を指定して API 連携を有効化</div>
+              </div>
+              <User className="h-4 w-4 text-zinc-500" strokeWidth={1.5} />
+            </div>
+            <input
+              value={familyId}
+              onChange={(e) => setFamilyId(e.target.value)}
+              className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              placeholder="familyId を入力"
+            />
+            {message && <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">{message}</div>}
+          </Card>
+
+          <Card className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">イベント追加（API + ローカルに反映）</div>
+                <div className="text-xs text-zinc-500">タイトル・日時を入力して登録</div>
+              </div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                <Plus className="h-4 w-4" strokeWidth={1.5} />
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:col-span-2"
+                placeholder="タイトル"
+                value={createForm.title}
+                onChange={(e) => setCreateForm((p) => ({ ...p, title: e.target.value }))}
+              />
+              <input
+                type="date"
+                className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                value={createForm.date}
+                onChange={(e) => setCreateForm((p) => ({ ...p, date: e.target.value }))}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="time"
+                  className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  value={createForm.start}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, start: e.target.value }))}
+                />
+                <input
+                  type="time"
+                  className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  value={createForm.end}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, end: e.target.value }))}
+                />
+              </div>
+              <input
+                className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:col-span-2"
+                placeholder="場所（任意）"
+                value={createForm.location}
+                onChange={(e) => setCreateForm((p) => ({ ...p, location: e.target.value }))}
+              />
+              <div className="sm:col-span-2">
+                <div className="text-xs text-zinc-500 mb-1">参加メンバー</div>
+                <div className="flex flex-wrap gap-2">
+                  {members.map((m) => {
+                    const checked = createForm.memberIds.includes(m.id);
+                    return (
+                      <label
+                        key={m.id}
+                        className="flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...createForm.memberIds, m.id]
+                              : createForm.memberIds.filter((id) => id !== m.id);
+                            setCreateForm((p) => ({ ...p, memberIds: next }));
+                          }}
+                        />
+                        {m.name}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="sm:col-span-2 flex justify-end">
+                <button
+                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+                  onClick={handleCreateEvent}
+                >
+                  追加して登録
+                </button>
+              </div>
+            </div>
+          </Card>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
@@ -363,7 +540,7 @@ function TaskList() {
   );
 }
 
-function EventList() {
+function EventList({ events }: { events: Event[] }) {
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
