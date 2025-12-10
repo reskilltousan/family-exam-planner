@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, GripVertical, MapPin, Plus, Tag, User } from "lucide-react";
 
 type Member = { id: string; name: string; color: string };
