@@ -19,7 +19,7 @@ type Task = {
   title: string;
   due: string;
   assignee: string;
-  status: "not_started" | "in_progress" | "done";
+  status: "未対応" | "進行中" | "完了";
 };
 type SectionKey = "quick" | "week" | "tasks" | "events";
 
@@ -63,9 +63,9 @@ const initialEvents: Event[] = [
 ];
 
 const initialTasks: Task[] = [
-  { id: "t1", title: "受験票印刷", due: addDaysString(new Date(), 1), assignee: "保護者A", status: "in_progress" },
-  { id: "t2", title: "持ち物チェック", due: addDaysString(new Date(), 2), assignee: "子どもA", status: "not_started" },
-  { id: "t3", title: "会場アクセス確認", due: addDaysString(new Date(), 2), assignee: "保護者A", status: "done" },
+  { id: "t1", title: "受験票印刷", due: addDaysString(new Date(), 1), assignee: "保護者A", status: "進行中" },
+  { id: "t2", title: "持ち物チェック", due: addDaysString(new Date(), 2), assignee: "子どもA", status: "未対応" },
+  { id: "t3", title: "会場アクセス確認", due: addDaysString(new Date(), 2), assignee: "保護者A", status: "完了" },
 ];
 
 export default function MockPage() {
@@ -622,9 +622,9 @@ function DetailSheet({
                   value={formTask.status}
                   onChange={(e) => setFormTask({ ...formTask, status: e.target.value as Task["status"] })}
                 >
-                  <option value="not_started">not_started</option>
-                  <option value="in_progress">in_progress</option>
-                  <option value="done">done</option>
+                  <option value="未対応">未対応</option>
+                  <option value="進行中">進行中</option>
+                  <option value="完了">完了</option>
                 </select>
                 <div className="flex gap-2">
                   <button
@@ -761,6 +761,8 @@ function QuickActions() {
 function WeekView({
   weekDays,
   groupedEvents,
+  tasks,
+  members,
   weekLabel,
   onPrevWeek,
   onNextWeek,
@@ -769,6 +771,8 @@ function WeekView({
 }: {
   weekDays: { iso: string; day: number; label: string }[];
   groupedEvents: Record<string, Event[]>;
+  tasks: Task[];
+  members: Member[];
   weekLabel: string;
   onPrevWeek: () => void;
   onNextWeek: () => void;
@@ -817,6 +821,7 @@ function WeekView({
           {weekDays.map((d) => {
             const isToday = d.iso === todayIso();
             const dayEvents = groupedEvents[d.iso] ?? [];
+            const dayTasks = tasks.filter((t) => t.due === d.iso);
             return (
               <div key={d.iso} className="flex h-36 flex-col gap-3 border-b border-zinc-100 p-5">
                 <div className="flex items-center gap-2">
@@ -839,7 +844,28 @@ function WeekView({
                       <span className={`h-6 w-1 rounded-full ${ev.tagColor}`} />
                       <div className="flex-1">
                         <div className="font-semibold text-zinc-900">{ev.title}</div>
-                        <div className="text-[11px] text-zinc-500">{ev.timeRange}</div>
+                        <div className="text-[11px] text-zinc-500">
+                          {ev.timeRange}
+                          {ev.members.length > 0 && (
+                            <span className="ml-1 text-[10px] text-zinc-500">
+                              / {ev.members.map((id) => members.find((m) => m.id === id)?.name ?? id).join(", ")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {dayTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-2 rounded-xl border border-zinc-100 bg-white px-3 py-2 text-xs shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                    >
+                      <span className={`h-6 w-1 rounded-full ${statusColor(task.status)}`} />
+                      <div className="flex-1">
+                        <div className="font-semibold text-zinc-900">{task.title}</div>
+                        <div className="text-[11px] text-zinc-500">
+                          期限: {task.due} / 担当: {task.assignee || "未割当"}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1038,8 +1064,8 @@ function startOfWeekMonday(date: Date) {
 }
 
 function statusColor(status: Task["status"]) {
-  if (status === "done") return "bg-emerald-500";
-  if (status === "in_progress") return "bg-amber-400";
+  if (status === "完了") return "bg-emerald-500";
+  if (status === "進行中") return "bg-amber-400";
   return "bg-zinc-300";
 }
 
