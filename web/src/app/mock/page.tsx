@@ -921,7 +921,15 @@ function TaskList({ tasks, onSelectTask }: { tasks: Task[]; onSelectTask: (task:
   );
 }
 
-function EventList({ events, members }: { events: Event[]; members: Member[] }) {
+function EventList({
+  events,
+  members,
+  onSelectEvent,
+}: {
+  events: Event[];
+  members: Member[];
+  onSelectEvent: (ev: Event) => void;
+}) {
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
@@ -937,7 +945,8 @@ function EventList({ events, members }: { events: Event[]; members: Member[] }) 
         {events.map((ev) => (
           <div
             key={ev.id}
-            className="flex items-center gap-4 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+            className="flex cursor-pointer items-center gap-4 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition hover:shadow-md"
+            onClick={() => onSelectEvent(ev)}
           >
             <span className={`h-12 w-1 rounded-full ${ev.tagColor}`} />
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-50 text-zinc-500">
@@ -975,7 +984,13 @@ function EventList({ events, members }: { events: Event[]; members: Member[] }) 
               <Tag className="h-3.5 w-3.5" strokeWidth={1.5} />
               <span>{ev.tag}</span>
             </div>
-            <button className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:opacity-90">
+            <button
+              className="rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectEvent(ev);
+              }}
+            >
               詳細
             </button>
           </div>
