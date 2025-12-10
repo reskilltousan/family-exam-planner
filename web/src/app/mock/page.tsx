@@ -69,7 +69,7 @@ const initialTasks: Task[] = [
 ];
 
 export default function MockPage() {
-  const [familyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
+  const [familyId, setFamilyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
   const [members, setMembers] = useState<Member[]>(defaultMembers);
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -101,6 +101,8 @@ export default function MockPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
+      const fid = window.localStorage.getItem("familyId");
+      if (fid) queueMicrotask(() => setFamilyId(fid));
       const raw = window.localStorage.getItem("familyMembers");
       if (!raw) return;
       const names = (JSON.parse(raw) as string[]).filter(Boolean);
@@ -261,12 +263,18 @@ export default function MockPage() {
           </div>
           <div className="flex items-center gap-3 text-sm text-zinc-600">
             <User className="h-4 w-4" strokeWidth={1.5} />
-            <span className="hidden sm:inline">Demo User</span>
+            {familyId ? (
+              <span className="hidden rounded-full bg-zinc-900 px-3 py-1 text-xs font-semibold text-white sm:inline">
+                family: {familyId.slice(0, 10)}
+              </span>
+            ) : (
+              <span className="hidden sm:inline text-amber-600">family未設定</span>
+            )}
             <a
               href="/auth"
               className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
             >
-              新規作成 / ログイン
+              {familyId ? "切替 / ログイン" : "新規作成 / ログイン"}
             </a>
           </div>
         </div>
