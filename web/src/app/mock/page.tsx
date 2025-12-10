@@ -72,6 +72,9 @@ export default function MockPage() {
   const [familyId, setFamilyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [message, setMessage] = useState<string>("");
+  const [registerForm, setRegisterForm] = useState({ name: "", email: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [authLoading, setAuthLoading] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "",
     date: todayIso(),
@@ -91,6 +94,72 @@ export default function MockPage() {
       return acc;
     }, {});
   }, [events]);
+
+  async function handleRegister() {
+    if (!registerForm.name.trim() || !registerForm.email.trim() || !registerForm.password.trim()) {
+      setMessage("family名・メール・パスワードを入力してください");
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(registerForm),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { id: string; name: string; email: string };
+      setFamilyId(data.id);
+      setMessage("familyを作成して選択しました");
+      setRegisterForm({ name: "", email: "", password: "" });
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleLogin() {
+    if (!loginForm.email.trim() || !loginForm.password.trim()) {
+      setMessage("メール・パスワードを入力してください");
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loginForm),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json()) as { id: string; name: string; email: string };
+      setFamilyId(data.id);
+      setMessage("ログインして family を選択しました");
+      setLoginForm({ email: "", password: "" });
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleLoadFromSession() {
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/me");
+      if (!res.ok) {
+        setMessage("ログイン情報が見つかりません");
+        return;
+      }
+      const data = (await res.json()) as { id: string; name: string; email?: string };
+      setFamilyId(data.id);
+      setMessage("Cookieから family を復元しました");
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setAuthLoading(false);
+    }
+  }
 
   const [order, setOrder] = useState<SectionKey[]>(["quick", "week", "tasks", "events"]);
   const [dragging, setDragging] = useState<SectionKey | null>(null);
@@ -223,6 +292,57 @@ export default function MockPage() {
               className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
               placeholder="familyId を入力"
             />
+            <div className="flex flex-wrap gap-2 text-xs">
+              <button
+                className="rounded-full bg-zinc-900 px-3 py-1 font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-60"
+                onClick={handleLoadFromSession}
+                disabled={authLoading}
+              >
+                Cookieから読み込む
+              </button>
+              <button
+                className="rounded-full bg-blue-600 px-3 py-1 font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-60"
+                onClick={handleRegister}
+                disabled={authLoading}
+              >
+                新規作成
+              </button>
+              <button
+                className="rounded-full bg-zinc-100 px-3 py-1 font-semibold text-zinc-800 hover:opacity-90 disabled:opacity-60"
+                onClick={handleLogin}
+                disabled={authLoading}
+              >
+                ログイン
+              </button>
+              {authLoading && <span className="text-zinc-500">処理中...</span>}
+            </div>
+            <div className="grid gap-2 text-xs sm:grid-cols-3">
+              <input
+                className="rounded-2xl border border-zinc-200 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                placeholder="family名 / name"
+                value={registerForm.name}
+                onChange={(e) => setRegisterForm((p) => ({ ...p, name: e.target.value }))}
+              />
+              <input
+                className="rounded-2xl border border-zinc-200 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                placeholder="メール"
+                value={registerForm.email}
+                onChange={(e) => {
+                  setRegisterForm((p) => ({ ...p, email: e.target.value }));
+                  setLoginForm((p) => ({ ...p, email: e.target.value }));
+                }}
+              />
+              <input
+                type="password"
+                className="rounded-2xl border border-zinc-200 px-3 py-2 focus:border-blue-500 focus:outline-none"
+                placeholder="パスワード"
+                value={registerForm.password}
+                onChange={(e) => {
+                  setRegisterForm((p) => ({ ...p, password: e.target.value }));
+                  setLoginForm((p) => ({ ...p, password: e.target.value }));
+                }}
+              />
+            </div>
             {message && <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">{message}</div>}
           </Card>
 
