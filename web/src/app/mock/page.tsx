@@ -162,7 +162,20 @@ export default function MockPage() {
       ),
       label: "タスク",
     },
-    events: { span: "full", render: () => <EventList events={events} members={members} />, label: "イベント一覧" },
+    events: {
+      span: "full",
+      render: () => (
+        <EventList
+          events={events}
+          members={members}
+          onSelectEvent={(ev) => {
+            setSelectedTask(null);
+            setSelectedEvent(ev);
+          }}
+        />
+      ),
+      label: "イベント一覧",
+    },
   };
 
   async function handleCreateEvent() {
