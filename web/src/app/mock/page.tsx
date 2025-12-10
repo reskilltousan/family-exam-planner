@@ -62,7 +62,7 @@ const initialEvents: Event[] = [
   },
 ];
 
-const tasks: Task[] = [
+const initialTasks: Task[] = [
   { id: "t1", title: "受験票印刷", due: addDaysString(new Date(), 1), assignee: "保護者A", status: "in_progress" },
   { id: "t2", title: "持ち物チェック", due: addDaysString(new Date(), 2), assignee: "子どもA", status: "not_started" },
   { id: "t3", title: "会場アクセス確認", due: addDaysString(new Date(), 2), assignee: "保護者A", status: "done" },
@@ -71,6 +71,7 @@ const tasks: Task[] = [
 export default function MockPage() {
   const [familyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
   const [events, setEvents] = useState<Event[]>(initialEvents);
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [message, setMessage] = useState<string>("");
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -119,7 +120,16 @@ export default function MockPage() {
       ),
       label: "カレンダー",
     },
-    tasks: { span: "half", render: () => <TaskList onSelectTask={(t) => setSelectedTask(t)} />, label: "タスク" },
+    tasks: {
+      span: "half",
+      render: () => (
+        <TaskList
+          tasks={tasks}
+          onSelectTask={(t) => setSelectedTask(t)}
+        />
+      ),
+      label: "タスク",
+    },
     events: { span: "full", render: () => <EventList events={events} />, label: "イベント一覧" },
   };
 
@@ -185,6 +195,14 @@ export default function MockPage() {
       location: "",
       memberIds: [],
     }));
+  }
+
+  function handleUpdateEvent(update: Event) {
+    setEvents((prev) => prev.map((e) => (e.id === update.id ? update : e)));
+  }
+
+  function handleUpdateTask(update: Task) {
+    setTasks((prev) => prev.map((t) => (t.id === update.id ? update : t)));
   }
 
   const handleDrop = (source: SectionKey, target: SectionKey) => {
@@ -347,6 +365,8 @@ export default function MockPage() {
         event={selectedEvent}
         task={selectedTask}
         members={members}
+        onSaveEvent={handleUpdateEvent}
+        onSaveTask={handleUpdateTask}
         onClose={() => {
           setSelectedEvent(null);
           setSelectedTask(null);
@@ -361,19 +381,31 @@ function DetailSheet({
   task,
   onClose,
   members,
+  onSaveEvent,
+  onSaveTask,
 }: {
   event?: Event | null;
   task?: Task | null;
   onClose: () => void;
   members: Member[];
+  onSaveEvent: (ev: Event) => void;
+  onSaveTask: (task: Task) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [formEvent, setFormEvent] = useState(() => {
+    if (!event) return null;
+    const [start = "", end = ""] = event.timeRange.split("-").map((s) => s.trim());
+    return { ...event, start, end };
+  });
+  const [formTask, setFormTask] = useState(() => (task ? { ...task } : null));
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !editing) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, editing]);
 
   const isEvent = !!event;
   if (!event && !task) return null;
@@ -389,35 +421,213 @@ function DetailSheet({
             閉じる
           </button>
         </div>
-        {isEvent && event && (
-          <div className="space-y-2 pt-3 text-sm text-zinc-700">
-            <div className="text-base font-semibold text-zinc-900">{event.title}</div>
-            <div className="text-xs text-zinc-500">{event.date} / {event.timeRange}</div>
-            {event.location && <div className="text-xs text-zinc-600">場所: {event.location}</div>}
-            <div className="flex items-center gap-2 text-xs text-zinc-600">
-              <Tag className="h-4 w-4" strokeWidth={1.5} />
-              <span className={`rounded-full px-2 py-0.5 text-[11px] ${event.tagColor}`}>{event.tag}</span>
-            </div>
-            <div className="text-xs text-zinc-600">
-              参加メンバー:{" "}
-              {event.members
-                .map((id) => members.find((m) => m.id === id)?.name ?? id)
-                .join(", ")}
-            </div>
+        {isEvent && event && formEvent && (
+          <div className="space-y-3 pt-3 text-sm text-zinc-700">
+            {editing ? (
+              <>
+                <input
+                  className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  value={formEvent.title}
+                  onChange={(e) => setFormEvent({ ...formEvent, title: e.target.value })}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    value={formEvent.date}
+                    onChange={(e) => setFormEvent({ ...formEvent, date: e.target.value })}
+                  />
+                  <input
+                    className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    value={formEvent.location ?? ""}
+                    placeholder="場所（任意）"
+                    onChange={(e) => setFormEvent({ ...formEvent, location: e.target.value || undefined })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="time"
+                    className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    value={formEvent.start}
+                    onChange={(e) => setFormEvent({ ...formEvent, start: e.target.value })}
+                  />
+                  <input
+                    type="time"
+                    className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    value={formEvent.end}
+                    onChange={(e) => setFormEvent({ ...formEvent, end: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-zinc-600">
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-4 w-4" strokeWidth={1.5} />
+                    <input
+                      className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                      value={formEvent.tag}
+                      onChange={(e) => setFormEvent({ ...formEvent, tag: e.target.value })}
+                    />
+                  </div>
+                  <input
+                    className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    value={formEvent.tagColor}
+                    onChange={(e) => setFormEvent({ ...formEvent, tagColor: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-zinc-600">
+                  {members.map((m) => {
+                    const checked = formEvent.members.includes(m.id);
+                    return (
+                      <label key={m.id} className="flex items-center gap-1 rounded-full border border-zinc-200 px-3 py-1">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...formEvent.members, m.id]
+                              : formEvent.members.filter((id) => id !== m.id);
+                            setFormEvent({ ...formEvent, members: next });
+                          }}
+                        />
+                        {m.name}
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+                    onClick={() => {
+                      if (!formEvent.start || !formEvent.end) return;
+                      const updated: Event = {
+                        id: event.id,
+                        title: formEvent.title || event.title,
+                        date: formEvent.date,
+                        timeRange: `${formEvent.start} - ${formEvent.end}`,
+                        location: formEvent.location,
+                        members: formEvent.members,
+                        tag: formEvent.tag,
+                        tagColor: formEvent.tagColor,
+                      };
+                      onSaveEvent(updated);
+                      setEditing(false);
+                    }}
+                  >
+                    保存
+                  </button>
+                  <button
+                    className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-800 hover:opacity-90"
+                    onClick={() => setEditing(false)}
+                  >
+                    編集をやめる
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-base font-semibold text-zinc-900">{event.title}</div>
+                <div className="text-xs text-zinc-500">
+                  {event.date} / {event.timeRange}
+                </div>
+                {event.location && <div className="text-xs text-zinc-600">場所: {event.location}</div>}
+                <div className="flex items-center gap-2 text-xs text-zinc-600">
+                  <Tag className="h-4 w-4" strokeWidth={1.5} />
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] ${event.tagColor}`}>{event.tag}</span>
+                </div>
+                <div className="text-xs text-zinc-600">
+                  参加メンバー:{" "}
+                  {event.members
+                    .map((id) => members.find((m) => m.id === id)?.name ?? id)
+                    .join(", ")}
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    className="rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+                    onClick={() => setEditing(true)}
+                  >
+                    編集
+                  </button>
+                  <button
+                    className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-800 hover:opacity-90"
+                    onClick={onClose}
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
-        {!isEvent && task && (
-          <div className="space-y-2 pt-3 text-sm text-zinc-700">
-            <div className="text-base font-semibold text-zinc-900">{task.title}</div>
-            <div className="text-xs text-zinc-600">
-              期限: {task.due}
-            </div>
-            <div className="text-xs text-zinc-600">
-              担当: {task.assignee}
-            </div>
-            <div className="text-xs text-zinc-600">
-              ステータス: {task.status}
-            </div>
+        {!isEvent && task && formTask && (
+          <div className="space-y-3 pt-3 text-sm text-zinc-700">
+            {editing ? (
+              <>
+                <input
+                  className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  value={formTask.title}
+                  onChange={(e) => setFormTask({ ...formTask, title: e.target.value })}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    value={formTask.due}
+                    onChange={(e) => setFormTask({ ...formTask, due: e.target.value })}
+                  />
+                  <input
+                    className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    value={formTask.assignee}
+                    onChange={(e) => setFormTask({ ...formTask, assignee: e.target.value })}
+                  />
+                </div>
+                <select
+                  className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  value={formTask.status}
+                  onChange={(e) => setFormTask({ ...formTask, status: e.target.value as Task["status"] })}
+                >
+                  <option value="not_started">not_started</option>
+                  <option value="in_progress">in_progress</option>
+                  <option value="done">done</option>
+                </select>
+                <div className="flex gap-2">
+                  <button
+                    className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+                    onClick={() => {
+                      onSaveTask(formTask);
+                      setEditing(false);
+                    }}
+                  >
+                    保存
+                  </button>
+                  <button
+                    className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-800 hover:opacity-90"
+                    onClick={() => setEditing(false)}
+                  >
+                    編集をやめる
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-base font-semibold text-zinc-900">{task.title}</div>
+                <div className="text-xs text-zinc-600">期限: {task.due}</div>
+                <div className="text-xs text-zinc-600">担当: {task.assignee}</div>
+                <div className="text-xs text-zinc-600">ステータス: {task.status}</div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    className="rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+                    onClick={() => setEditing(true)}
+                  >
+                    編集
+                  </button>
+                  <button
+                    className="rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-800 hover:opacity-90"
+                    onClick={onClose}
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -612,7 +822,7 @@ function WeekView({
   );
 }
 
-function TaskList({ onSelectTask }: { onSelectTask: (task: Task) => void }) {
+function TaskList({ tasks, onSelectTask }: { tasks: Task[]; onSelectTask: (task: Task) => void }) {
   return (
     <Card className="space-y-3">
       <div className="flex items-center gap-2">
