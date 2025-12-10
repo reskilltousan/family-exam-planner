@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CalendarDays, Lock, LogIn, UserPlus, UserRoundCheck } from "lucide-react";
+import { CalendarDays, Lock, LogIn, Plus, UserPlus, UserRoundCheck } from "lucide-react";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -168,6 +168,14 @@ export default function AuthPage() {
                     />
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setMemberInputs((prev) => [...prev, ""])}
+                  className="mt-2 flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-zinc-50"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={1.5} />
+                  メンバーを追加
+                </button>
               </div>
               <button
                 onClick={handleRegister}
