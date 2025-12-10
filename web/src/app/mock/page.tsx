@@ -146,6 +146,10 @@ export default function MockPage() {
             setSelectedTask(null);
             setSelectedEvent(ev);
           }}
+          onSelectTask={(task) => {
+            setSelectedEvent(null);
+            setSelectedTask(task);
+          }}
         />
       ),
       label: "カレンダー",
@@ -714,6 +718,7 @@ function WeekView({
   onNextWeek,
   onToday,
   onSelectEvent,
+  onSelectTask,
 }: {
   weekDays: { iso: string; day: number; label: string }[];
   groupedEvents: Record<string, Event[]>;
@@ -724,6 +729,7 @@ function WeekView({
   onNextWeek: () => void;
   onToday: () => void;
   onSelectEvent: (ev: Event) => void;
+  onSelectTask: (task: Task) => void;
 }) {
   return (
     <Card className="space-y-4">
@@ -804,7 +810,8 @@ function WeekView({
                   {dayTasks.map((task) => (
                     <div
                       key={task.id}
-                      className="flex items-center gap-2 rounded-xl border border-zinc-100 bg-white px-3 py-2 text-xs shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                      className="flex cursor-pointer items-center gap-2 rounded-xl border border-zinc-100 bg-white px-3 py-2 text-xs shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition hover:shadow-md"
+                      onClick={() => onSelectTask(task)}
                     >
                       <span className={`h-6 w-1 rounded-full ${statusColor(task.status)}`} />
                       <div className="flex-1">
