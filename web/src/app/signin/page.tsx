@@ -35,7 +35,7 @@ export default function SignInPage() {
         <Separator label="または" />
 
         <Link
-          href="/auth"
+          href="/signin/email"
           className="block w-full rounded-full bg-zinc-900 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm hover:opacity-90"
         >
           メールアドレスで続行

@@ -291,7 +291,7 @@ export default function MockPage() {
               <span className="hidden sm:inline text-amber-600">family未設定</span>
             )}
             <a
-              href="/auth"
+              href="/signin"
               className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
             >
               {familyId ? "切替 / ログイン" : "新規作成 / ログイン"}
