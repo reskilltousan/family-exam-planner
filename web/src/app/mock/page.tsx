@@ -92,6 +92,8 @@ export default function MockPage() {
       return acc;
     }, {});
   }, [events]);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const [order, setOrder] = useState<SectionKey[]>(["quick", "week", "tasks", "events"]);
   const [dragging, setDragging] = useState<SectionKey | null>(null);
@@ -112,11 +114,12 @@ export default function MockPage() {
           onPrevWeek={() => setWeekOffset((v) => v - 1)}
           onNextWeek={() => setWeekOffset((v) => v + 1)}
           onToday={() => setWeekOffset(0)}
+          onSelectEvent={(ev) => setSelectedEvent(ev)}
         />
       ),
       label: "カレンダー",
     },
-    tasks: { span: "half", render: () => <TaskList />, label: "タスク" },
+    tasks: { span: "half", render: () => <TaskList onSelectTask={(t) => setSelectedTask(t)} />, label: "タスク" },
     events: { span: "full", render: () => <EventList events={events} />, label: "イベント一覧" },
   };
 
@@ -340,6 +343,76 @@ export default function MockPage() {
           })}
         </div>
       </main>
+      <DetailSheet
+        event={selectedEvent}
+        task={selectedTask}
+        members={members}
+        onClose={() => {
+          setSelectedEvent(null);
+          setSelectedTask(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function DetailSheet({
+  event,
+  task,
+  onClose,
+  members,
+}: {
+  event?: Event | null;
+  task?: Task | null;
+  onClose: () => void;
+  members: Member[];
+}) {
+  const isEvent = !!event;
+  if (!event && !task) return null;
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 px-4 py-8">
+      <div className="w-full max-w-md rounded-3xl border border-zinc-100 bg-white p-5 shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold">{isEvent ? "イベント詳細" : "タスク詳細"}</div>
+          <button
+            onClick={onClose}
+            className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-800 hover:opacity-90"
+          >
+            閉じる
+          </button>
+        </div>
+        {isEvent && event && (
+          <div className="space-y-2 pt-3 text-sm text-zinc-700">
+            <div className="text-base font-semibold text-zinc-900">{event.title}</div>
+            <div className="text-xs text-zinc-500">{event.date} / {event.timeRange}</div>
+            {event.location && <div className="text-xs text-zinc-600">場所: {event.location}</div>}
+            <div className="flex items-center gap-2 text-xs text-zinc-600">
+              <Tag className="h-4 w-4" strokeWidth={1.5} />
+              <span className={`rounded-full px-2 py-0.5 text-[11px] ${event.tagColor}`}>{event.tag}</span>
+            </div>
+            <div className="text-xs text-zinc-600">
+              参加メンバー:{" "}
+              {event.members
+                .map((id) => members.find((m) => m.id === id)?.name ?? id)
+                .join(", ")}
+            </div>
+          </div>
+        )}
+        {!isEvent && task && (
+          <div className="space-y-2 pt-3 text-sm text-zinc-700">
+            <div className="text-base font-semibold text-zinc-900">{task.title}</div>
+            <div className="text-xs text-zinc-600">
+              期限: {task.due}
+            </div>
+            <div className="text-xs text-zinc-600">
+              担当: {task.assignee}
+            </div>
+            <div className="text-xs text-zinc-600">
+              ステータス: {task.status}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -442,6 +515,7 @@ function WeekView({
   onPrevWeek,
   onNextWeek,
   onToday,
+  onSelectEvent,
 }: {
   weekDays: { iso: string; day: number; label: string }[];
   groupedEvents: Record<string, Event[]>;
@@ -449,6 +523,7 @@ function WeekView({
   onPrevWeek: () => void;
   onNextWeek: () => void;
   onToday: () => void;
+  onSelectEvent: (ev: Event) => void;
 }) {
   return (
     <Card className="space-y-4">
@@ -508,7 +583,8 @@ function WeekView({
                   {dayEvents.map((ev) => (
                     <div
                       key={ev.id}
-                      className="flex items-center gap-2 rounded-xl border border-zinc-100 bg-white px-3 py-2 text-xs shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+                      className="flex cursor-pointer items-center gap-2 rounded-xl border border-zinc-100 bg-white px-3 py-2 text-xs shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition hover:shadow-md"
+                      onClick={() => onSelectEvent(ev)}
                     >
                       <span className={`h-6 w-1 rounded-full ${ev.tagColor}`} />
                       <div className="flex-1">
@@ -528,7 +604,7 @@ function WeekView({
   );
 }
 
-function TaskList() {
+function TaskList({ onSelectTask }: { onSelectTask: (task: Task) => void }) {
   return (
     <Card className="space-y-3">
       <div className="flex items-center gap-2">
@@ -539,7 +615,8 @@ function TaskList() {
         {tasks.map((task) => (
           <div
             key={task.id}
-            className="flex items-center gap-4 rounded-2xl border border-zinc-100 bg-white px-3 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+            className="flex cursor-pointer items-center gap-4 rounded-2xl border border-zinc-100 bg-white px-3 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition hover:shadow-md"
+            onClick={() => onSelectTask(task)}
           >
             <span className={`h-10 w-1 rounded-full ${statusColor(task.status)}`} />
             <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-zinc-50 text-zinc-500">
