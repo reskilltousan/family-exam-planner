@@ -769,7 +769,7 @@ function WeekView({
             const dayEvents = groupedEvents[d.iso] ?? [];
             const dayTasks = tasks.filter((t) => t.due === d.iso);
             return (
-              <div key={d.iso} className="flex h-36 flex-col gap-3 border-b border-zinc-100 p-5">
+              <div key={d.iso} className="flex min-h-[180px] max-h-[220px] flex-col gap-3 border-b border-zinc-100 p-5">
                 <div className="flex items-center gap-2">
                   <div
                     className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
@@ -780,7 +780,7 @@ function WeekView({
                   </div>
                   <div className="text-xs text-zinc-500">{d.label}</div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 overflow-y-auto pr-1 max-h-[160px]">
                   {dayEvents.map((ev) => (
                     <div
                       key={ev.id}
