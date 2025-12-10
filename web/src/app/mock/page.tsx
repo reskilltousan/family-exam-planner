@@ -85,6 +85,7 @@ export default function MockPage() {
     tagColor: "bg-blue-100 text-blue-700",
   });
 
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDays = useMemo(() => buildWeekDays(todayIso(), weekOffset), [weekOffset]);
   const groupedEvents = useMemo(() => {
@@ -128,7 +129,7 @@ export default function MockPage() {
     SectionKey,
     { span: "full" | "half"; render: () => JSX.Element; label: string }
   > = {
-    quick: { span: "full", render: () => <QuickActions />, label: "クイックアクション" },
+    quick: { span: "full", render: () => <QuickActions onOpenCreate={() => setShowCreateModal(true)} />, label: "クイックアクション" },
     week: {
       span: "full",
       render: () => (
@@ -301,89 +302,6 @@ export default function MockPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold">イベント追加（API + ローカルに反映）</div>
-                <div className="text-xs text-zinc-500">familyId が設定されている場合は /api/events にPOSTします</div>
-              </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                <Plus className="h-4 w-4" strokeWidth={1.5} />
-              </div>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:col-span-2"
-                placeholder="タイトル"
-                value={createForm.title}
-                onChange={(e) => setCreateForm((p) => ({ ...p, title: e.target.value }))}
-              />
-              <input
-                type="date"
-                className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                value={createForm.date}
-                onChange={(e) => setCreateForm((p) => ({ ...p, date: e.target.value }))}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="time"
-                  className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  value={createForm.start}
-                  onChange={(e) => setCreateForm((p) => ({ ...p, start: e.target.value }))}
-                />
-                <input
-                  type="time"
-                  className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  value={createForm.end}
-                  onChange={(e) => setCreateForm((p) => ({ ...p, end: e.target.value }))}
-                />
-              </div>
-              <input
-                className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:col-span-2"
-                placeholder="場所（任意）"
-                value={createForm.location}
-                onChange={(e) => setCreateForm((p) => ({ ...p, location: e.target.value }))}
-              />
-              <div className="sm:col-span-2">
-                <div className="text-xs text-zinc-500 mb-1">参加メンバー</div>
-                <div className="flex flex-wrap gap-2">
-                  {members.map((m) => {
-                    const checked = createForm.memberIds.includes(m.id);
-                    return (
-                      <label
-                        key={m.id}
-                        className="flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-700"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            const next = e.target.checked
-                              ? [...createForm.memberIds, m.id]
-                              : createForm.memberIds.filter((id) => id !== m.id);
-                            setCreateForm((p) => ({ ...p, memberIds: next }));
-                          }}
-                        />
-                        {m.name}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="sm:col-span-2 flex justify-end">
-                <button
-                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-                  onClick={handleCreateEvent}
-                >
-                  追加して登録
-                </button>
-              </div>
-            </div>
-            {message && <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">{message}</div>}
-          </Card>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-2">
           {order.map((id) => {
             const section = sections[id];
             return (
@@ -423,6 +341,18 @@ export default function MockPage() {
           setSelectedEvent(null);
           setSelectedTask(null);
         }}
+      />
+      <CreateEventModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        createForm={createForm}
+        setCreateForm={setCreateForm}
+        onSubmit={() => {
+          handleCreateEvent();
+          setShowCreateModal(false);
+        }}
+        members={members}
+        message={message}
       />
     </div>
   );
@@ -742,7 +672,7 @@ function DraggableWrapper({
   );
 }
 
-function QuickActions() {
+function QuickActions({ onOpenCreate }: { onOpenCreate: () => void }) {
   return (
     <Card className="grid gap-4 sm:grid-cols-3">
       <ActionCard
@@ -752,6 +682,7 @@ function QuickActions() {
         subtitle="新しい予定を登録"
         actionLabel="作成"
         actionTone="primary"
+        onAction={onOpenCreate}
       />
       <ActionCard
         icon={<ListTodoIcon className="h-5 w-5" strokeWidth={1.5} />}
@@ -1013,6 +944,150 @@ function EventList({
   );
 }
 
+function CreateEventModal({
+  open,
+  onClose,
+  createForm,
+  setCreateForm,
+  onSubmit,
+  members,
+  message,
+}: {
+  open: boolean;
+  onClose: () => void;
+  createForm: {
+    title: string;
+    date: string;
+    start: string;
+    end: string;
+    location: string;
+    memberIds: string[];
+    tag: string;
+    tagColor: string;
+  };
+  setCreateForm: React.Dispatch<
+    React.SetStateAction<{
+      title: string;
+      date: string;
+      start: string;
+      end: string;
+      location: string;
+      memberIds: string[];
+      tag: string;
+      tagColor: string;
+    }>
+  >;
+  onSubmit: () => void;
+  onClose: () => void;
+  members: Member[];
+  message: string;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    if (open) window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, open]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-xl rounded-3xl border border-zinc-100 bg-white p-6 shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold">イベント追加</div>
+            <div className="text-xs text-zinc-500">familyId がある場合は API にも送信されます</div>
+          </div>
+          <button
+            className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-800 hover:opacity-90"
+            onClick={onClose}
+          >
+            閉じる
+          </button>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <input
+            className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:col-span-2"
+            placeholder="タイトル"
+            value={createForm.title}
+            onChange={(e) => setCreateForm((p) => ({ ...p, title: e.target.value }))}
+          />
+          <input
+            type="date"
+            className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            value={createForm.date}
+            onChange={(e) => setCreateForm((p) => ({ ...p, date: e.target.value }))}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="time"
+              className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              value={createForm.start}
+              onChange={(e) => setCreateForm((p) => ({ ...p, start: e.target.value }))}
+            />
+            <input
+              type="time"
+              className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              value={createForm.end}
+              onChange={(e) => setCreateForm((p) => ({ ...p, end: e.target.value }))}
+            />
+          </div>
+          <input
+            className="rounded-2xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:col-span-2"
+            placeholder="場所（任意）"
+            value={createForm.location}
+            onChange={(e) => setCreateForm((p) => ({ ...p, location: e.target.value }))}
+          />
+          <div className="sm:col-span-2">
+            <div className="mb-1 text-xs text-zinc-500">参加メンバー</div>
+            <div className="flex flex-wrap gap-2">
+              {members.map((m) => {
+                const checked = createForm.memberIds.includes(m.id);
+                return (
+                  <label
+                    key={m.id}
+                    className="flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-700"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...createForm.memberIds, m.id]
+                          : createForm.memberIds.filter((id) => id !== m.id);
+                        setCreateForm((p) => ({ ...p, memberIds: next }));
+                      }}
+                    />
+                    {m.name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div className="sm:col-span-2 flex justify-end gap-2">
+            <button
+              className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-800 hover:opacity-90"
+              onClick={onClose}
+            >
+              キャンセル
+            </button>
+            <button
+              className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+              onClick={onSubmit}
+            >
+              追加して登録
+            </button>
+          </div>
+          {message && (
+            <div className="sm:col-span-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">{message}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div
@@ -1030,6 +1105,7 @@ function ActionCard({
   subtitle,
   actionLabel,
   actionTone,
+  onAction,
 }: {
   icon: React.ReactNode;
   iconBg: string;
@@ -1037,6 +1113,7 @@ function ActionCard({
   subtitle: string;
   actionLabel: string;
   actionTone: "primary" | "ghost";
+  onAction?: () => void;
 }) {
   return (
     <div className="flex items-center justify-between rounded-2xl border border-zinc-100 bg-white px-3 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
@@ -1048,11 +1125,17 @@ function ActionCard({
         </div>
       </div>
       {actionTone === "primary" ? (
-        <button className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90">
+        <button
+          onClick={onAction}
+          className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+        >
           {actionLabel}
         </button>
       ) : (
-        <button className="rounded-full bg-zinc-100 px-4 py-2 text-xs font-semibold text-zinc-800 hover:opacity-90">
+        <button
+          onClick={onAction}
+          className="rounded-full bg-zinc-100 px-4 py-2 text-xs font-semibold text-zinc-800 hover:opacity-90"
+        >
           {actionLabel}
         </button>
       )}
