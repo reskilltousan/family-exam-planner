@@ -367,6 +367,14 @@ function DetailSheet({
   onClose: () => void;
   members: Member[];
 }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const isEvent = !!event;
   if (!event && !task) return null;
   return (
