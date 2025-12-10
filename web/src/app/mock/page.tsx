@@ -158,7 +158,7 @@ export default function MockPage() {
       ),
       label: "タスク",
     },
-    events: { span: "full", render: () => <EventList events={events} />, label: "イベント一覧" },
+    events: { span: "full", render: () => <EventList events={events} members={members} />, label: "イベント一覧" },
   };
 
   async function handleCreateEvent() {
@@ -878,7 +878,7 @@ function TaskList({ tasks, onSelectTask }: { tasks: Task[]; onSelectTask: (task:
   );
 }
 
-function EventList({ events }: { events: Event[] }) {
+function EventList({ events, members }: { events: Event[]; members: Member[] }) {
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
