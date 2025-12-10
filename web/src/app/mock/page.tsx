@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, Clock, GripVertical, MapPin, Plus, Tag, User } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock, GripVertical, MapPin, Plus, Tag, User } from "lucide-react";
 
 type Member = { id: string; name: string; color: string };
 type Event = {
@@ -83,7 +83,8 @@ export default function MockPage() {
     tagColor: "bg-blue-100 text-blue-700",
   });
 
-  const weekDays = useMemo(() => buildWeekDays(todayIso()), []);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const weekDays = useMemo(() => buildWeekDays(todayIso(), weekOffset), [weekOffset]);
   const groupedEvents = useMemo(() => {
     return events.reduce<Record<string, Event[]>>((acc, ev) => {
       if (!acc[ev.date]) acc[ev.date] = [];
@@ -101,7 +102,20 @@ export default function MockPage() {
     { span: "full" | "half"; render: () => JSX.Element; label: string }
   > = {
     quick: { span: "full", render: () => <QuickActions />, label: "クイックアクション" },
-    week: { span: "full", render: () => <WeekView weekDays={weekDays} groupedEvents={groupedEvents} />, label: "カレンダー" },
+    week: {
+      span: "full",
+      render: () => (
+        <WeekView
+          weekDays={weekDays}
+          groupedEvents={groupedEvents}
+          weekLabel={formatWeekRange(weekDays)}
+          onPrevWeek={() => setWeekOffset((v) => v - 1)}
+          onNextWeek={() => setWeekOffset((v) => v + 1)}
+          onToday={() => setWeekOffset(0)}
+        />
+      ),
+      label: "カレンダー",
+    },
     tasks: { span: "half", render: () => <TaskList />, label: "タスク" },
     events: { span: "full", render: () => <EventList events={events} />, label: "イベント一覧" },
   };
@@ -424,29 +438,51 @@ function QuickActions() {
 function WeekView({
   weekDays,
   groupedEvents,
+  weekLabel,
+  onPrevWeek,
+  onNextWeek,
+  onToday,
 }: {
   weekDays: { iso: string; day: number; label: string }[];
   groupedEvents: Record<string, Event[]>;
+  weekLabel: string;
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
+  onToday: () => void;
 }) {
   return (
     <Card className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-sm font-semibold">ウィークビュー</div>
-          <div className="text-xs text-zinc-500">薄い罫線でシンプルに</div>
+          <div className="text-xs text-zinc-500">{weekLabel}（月曜始まり）</div>
         </div>
-        <div className="flex gap-2">
-          <button className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
-            予定を追加
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <button
+            onClick={onPrevWeek}
+            className="flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1.5 font-semibold text-zinc-800 hover:opacity-90"
+          >
+            <ChevronLeft className="h-4 w-4" strokeWidth={1.5} />
+            前の週
           </button>
-          <button className="rounded-full bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-800 hover:opacity-90">
-            表示切替
+          <button
+            onClick={onToday}
+            className="rounded-full bg-zinc-900 px-3 py-1.5 font-semibold text-white shadow-sm hover:opacity-90"
+          >
+            今週
+          </button>
+          <button
+            onClick={onNextWeek}
+            className="flex items-center gap-1 rounded-full bg-zinc-100 px-3 py-1.5 font-semibold text-zinc-800 hover:opacity-90"
+          >
+            次の週
+            <ChevronRight className="h-4 w-4" strokeWidth={1.5} />
           </button>
         </div>
       </div>
       <div className="overflow-hidden rounded-2xl border border-zinc-100 bg-white">
         <div className="grid grid-cols-7 divide-x divide-zinc-100 border-b border-zinc-100 text-center text-xs font-semibold text-zinc-500">
-          {["日", "月", "火", "水", "木", "金", "土"].map((d) => (
+          {["月", "火", "水", "木", "金", "土", "日"].map((d) => (
             <div key={d} className="py-2">
               {d}
             </div>
@@ -647,14 +683,13 @@ function addDaysString(date: Date, days = 0) {
   return d.toISOString().slice(0, 10);
 }
 
-function buildWeekDays(anchorIso: string) {
+function buildWeekDays(anchorIso: string, offset = 0) {
   const anchor = new Date(anchorIso);
-  const day = anchor.getDay();
-  const sunday = new Date(anchor);
-  sunday.setDate(anchor.getDate() - day);
+  const monday = startOfWeekMonday(anchor);
+  monday.setDate(monday.getDate() + offset * 7);
   return Array.from({ length: 7 }).map((_, idx) => {
-    const d = new Date(sunday);
-    d.setDate(sunday.getDate() + idx);
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
     return {
       iso: d.toISOString().slice(0, 10),
       day: d.getDate(),
@@ -667,10 +702,25 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function startOfWeekMonday(date: Date) {
+  const d = new Date(date);
+  const day = (d.getDay() + 6) % 7; // Monday=0
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function statusColor(status: Task["status"]) {
   if (status === "done") return "bg-emerald-500";
   if (status === "in_progress") return "bg-amber-400";
   return "bg-zinc-300";
+}
+
+function formatWeekRange(weekDays: { iso: string }[]) {
+  if (weekDays.length === 0) return "";
+  const first = new Date(weekDays[0].iso);
+  const last = new Date(weekDays[weekDays.length - 1].iso);
+  return `${first.getMonth() + 1}/${first.getDate()} - ${last.getMonth() + 1}/${last.getDate()}`;
 }
 
 function labelToKey(label: string): SectionKey {
