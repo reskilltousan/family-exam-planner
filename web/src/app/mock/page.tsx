@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, GripVertical, MapPin, Plus, Tag, User } from "lucide-react";
 
@@ -356,6 +357,22 @@ export default function MockPage() {
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-6">
         <div className="rounded-2xl border border-zinc-100 bg-white px-4 py-3 text-sm text-zinc-600 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
           カードをドラッグ＆ドロップして、お好きな配置に並べ替えできます。
+        </div>
+
+        <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <span className="text-xs font-semibold text-zinc-500">受験ナビゲーション</span>
+          <Link
+            href="/highschools"
+            className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+          >
+            受験校検索（入試日程メモ）
+          </Link>
+          <Link
+            href="/exam"
+            className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+          >
+            大学受験情報（Passnavi風）
+          </Link>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
