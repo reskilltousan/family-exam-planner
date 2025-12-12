@@ -126,6 +126,42 @@ export function parseTokyoSchools(html: string): SchoolRow[] {
   return schools;
 }
 
+/**
+ * 埼玉県私学協会 学校紹介ページ向けパーサ（学校名＋リンクのみ抽出）。
+ * 想定URL: https://saitamashigaku.com/pages/6/
+ * セクション: 中学校 / 高等学校 / 中等教育学校
+ * エリア: <strong>エリア名</strong> のブロック内に複数校リンクが列挙される。
+ */
+export function parseSaitamaSchools(html: string): SchoolRow[] {
+  const schools: SchoolRow[] = [];
+  const sections = sliceByMarkers(html, ["中学校", "高等学校", "中等教育学校"]);
+  for (const section of sections) {
+    const category = section.label;
+    // エリアごとに <strong>エリア名</strong> ブロックで区切られている
+    const areaBlocks = sliceByStrong(section.content);
+    for (const block of areaBlocks) {
+      const area = block.label;
+      const links = [...block.content.matchAll(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)];
+      for (const link of links) {
+        const website = normalizeUrl(link[1]);
+        const name = cleanText(link[2]);
+        if (!name) continue;
+        schools.push({
+          name,
+          website,
+          map: null,
+          area,
+          category,
+          attributes: [],
+          address: null,
+          phone: null,
+        });
+      }
+    }
+  }
+  return schools;
+}
+
 function sliceByMarkers(source: string, markers: string[]) {
   const result: { label: string | null; content: string }[] = [];
   const positions: { label: string; index: number }[] = [];
@@ -148,6 +184,27 @@ function sliceByMarkers(source: string, markers: string[]) {
       label: positions[i].label,
       content: source.slice(start, end),
     });
+  }
+  return result;
+}
+
+function sliceByStrong(source: string) {
+  const result: { label: string | null; content: string }[] = [];
+  const re = /<strong[^>]*>([\s\S]*?)<\/strong>/gi;
+  const positions: { label: string; index: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source))) {
+    positions.push({ label: cleanText(m[1]), index: m.index ?? 0 });
+  }
+  positions.sort((a, b) => a.index - b.index);
+  if (!positions.length) {
+    result.push({ label: null, content: source });
+    return result;
+  }
+  for (let i = 0; i < positions.length; i++) {
+    const start = positions[i].index;
+    const end = positions[i + 1]?.index ?? source.length;
+    result.push({ label: positions[i].label, content: source.slice(start, end) });
   }
   return result;
 }
