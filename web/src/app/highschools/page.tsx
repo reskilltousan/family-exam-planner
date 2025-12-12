@@ -8,6 +8,20 @@ type School = {
   area: string | null;
   category: string | null;
   attributes: string[];
+  address?: string | null;
+  phone?: string | null;
+};
+
+type ExamEntry = {
+  id: string;
+  course: string;
+  kind: string; // 一般/推薦/併願/専願 など自由入力
+  applyStart: string | null;
+  applyEnd: string | null;
+  examDate: string | null;
+  resultDate: string | null;
+  procedureDeadline: string | null;
+  noteUrl: string | null;
 };
 
 const PREFS: { value: string; label: string; levels: ("junior" | "high" | null)[] }[] = [
@@ -35,6 +49,8 @@ export default function HighschoolPage() {
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [keyword, setKeyword] = useState("");
+  const [examModal, setExamModal] = useState<{ open: boolean; school: School | null }>({ open: false, school: null });
+  const [examData, setExamData] = useState<Record<string, ExamEntry[]>>({});
 
   useEffect(() => {
     const raw = localStorage.getItem("hsFavorites");
@@ -43,6 +59,14 @@ export default function HighschoolPage() {
         setFavorites(JSON.parse(raw));
       } catch {
         setFavorites({});
+      }
+    }
+    const examRaw = localStorage.getItem("hsExamEntries");
+    if (examRaw) {
+      try {
+        setExamData(JSON.parse(examRaw));
+      } catch {
+        setExamData({});
       }
     }
   }, []);
@@ -79,6 +103,18 @@ export default function HighschoolPage() {
     setFavorites((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       localStorage.setItem("hsFavorites", JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function getExamKey(s: School) {
+    return `${pref}:${level ?? "all"}:${s.name}`;
+  }
+
+  function handleExamSave(key: string, entries: ExamEntry[]) {
+    setExamData((prev) => {
+      const next = { ...prev, [key]: entries };
+      localStorage.setItem("hsExamEntries", JSON.stringify(next));
       return next;
     });
   }
@@ -152,25 +188,31 @@ export default function HighschoolPage() {
                               {s.area}
                             </span>
                           )}
-                          {s.category && (
-                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                              {s.category}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => toggleFavorite(s.name)}
-                          className={`rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${
-                            isFav ? "bg-amber-500 text-white" : "bg-zinc-900 text-white"
-                          } hover:opacity-90`}
-                        >
-                          {isFav ? "お気に入り済み" : "お気に入りに追加"}
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                        {s.attributes.map((a) => (
-                          <span key={a} className="rounded-full bg-zinc-100 px-2 py-0.5 font-semibold text-zinc-600">
-                            {a}
+                  {s.category && (
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                      {s.category}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => toggleFavorite(s.name)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${
+                    isFav ? "bg-amber-500 text-white" : "bg-zinc-900 text-white"
+                  } hover:opacity-90`}
+                >
+                  {isFav ? "お気に入り済み" : "お気に入りに追加"}
+                </button>
+                <button
+                  onClick={() => setExamModal({ open: true, school: s })}
+                  className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm ring-1 ring-blue-100 hover:bg-blue-100"
+                >
+                  入試日程を管理
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                {s.attributes.map((a) => (
+                  <span key={a} className="rounded-full bg-zinc-100 px-2 py-0.5 font-semibold text-zinc-600">
+                    {a}
                           </span>
                         ))}
                         {s.website && (
@@ -193,6 +235,166 @@ export default function HighschoolPage() {
           )}
         </main>
       </div>
+      {examModal.open && examModal.school && (
+        <ExamModal
+          school={examModal.school}
+          pref={pref}
+          level={level}
+          onClose={() => setExamModal({ open: false, school: null })}
+          existing={examData[getExamKey(examModal.school)] ?? []}
+          onSave={(entries) => {
+            handleExamSave(getExamKey(examModal.school!), entries);
+            setExamModal({ open: false, school: null });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function ExamModal({
+  school,
+  pref,
+  level,
+  existing,
+  onClose,
+  onSave,
+}: {
+  school: School;
+  pref: string;
+  level: "junior" | "high" | null;
+  existing: ExamEntry[];
+  onClose: () => void;
+  onSave: (entries: ExamEntry[]) => void;
+}) {
+  const [draft, setDraft] = useState<ExamEntry[]>(
+    existing.length
+      ? existing
+      : [
+          {
+            id: crypto.randomUUID(),
+            course: "",
+            kind: "",
+            applyStart: null,
+            applyEnd: null,
+            examDate: null,
+            resultDate: null,
+            procedureDeadline: null,
+            noteUrl: null,
+          },
+        ],
+  );
+
+  function update(id: string, patch: Partial<ExamEntry>) {
+    setDraft((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  }
+  function addRow() {
+    setDraft((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        course: "",
+        kind: "",
+        applyStart: null,
+        applyEnd: null,
+        examDate: null,
+        resultDate: null,
+        procedureDeadline: null,
+        noteUrl: null,
+      },
+    ]);
+  }
+  function removeRow(id: string) {
+    setDraft((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/30 px-4 py-10">
+      <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-xl ring-1 ring-zinc-200">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold">{school.name} の入試日程</h2>
+            <p className="text-sm text-zinc-500">
+              {pref} / {level ?? "指定なし"} / 公式サイトは各校ページで確認してください。
+            </p>
+          </div>
+          <button onClick={onClose} className="text-sm font-semibold text-zinc-500 hover:text-zinc-700">
+            閉じる
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3">
+          {draft.map((row) => (
+            <div key={row.id} className="rounded-2xl border border-zinc-100 p-3 shadow-sm">
+              <div className="flex flex-wrap gap-2">
+                <input
+                  className="min-w-[140px] flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="コース・区分（例: 普通科 / 国際科）"
+                  value={row.course}
+                  onChange={(e) => update(row.id, { course: e.target.value })}
+                />
+                <input
+                  className="min-w-[120px] rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="入試種類（例: 推薦A/一般）"
+                  value={row.kind}
+                  onChange={(e) => update(row.id, { kind: e.target.value })}
+                />
+                <button
+                  onClick={() => removeRow(row.id)}
+                  className="rounded-full px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                >
+                  削除
+                </button>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <DateField label="願書受付開始" value={row.applyStart} onChange={(v) => update(row.id, { applyStart: v })} />
+                <DateField label="願書締切" value={row.applyEnd} onChange={(v) => update(row.id, { applyEnd: v })} />
+                <DateField label="試験日" value={row.examDate} onChange={(v) => update(row.id, { examDate: v })} />
+                <DateField label="合格発表日" value={row.resultDate} onChange={(v) => update(row.id, { resultDate: v })} />
+                <DateField
+                  label="入学手続締切"
+                  value={row.procedureDeadline}
+                  onChange={(v) => update(row.id, { procedureDeadline: v })}
+                />
+                <input
+                  className="rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="募集要項URL（任意）"
+                  value={row.noteUrl ?? ""}
+                  onChange={(e) => update(row.id, { noteUrl: e.target.value || null })}
+                />
+              </div>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <button
+              onClick={addRow}
+              className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+            >
+              行を追加
+            </button>
+            <button
+              onClick={() => onSave(draft)}
+              className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DateField({ label, value, onChange }: { label: string; value: string | null; onChange: (v: string | null) => void }) {
+  return (
+    <label className="flex flex-col gap-1 text-xs font-semibold text-zinc-600">
+      {label}
+      <input
+        type="date"
+        className="rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+      />
+    </label>
   );
 }
