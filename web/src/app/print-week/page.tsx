@@ -22,6 +22,7 @@ type Task = {
 
 export default function PrintWeekPage() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [admissionEvents, setAdmissionEvents] = useState<Event[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDays = useMemo(() => buildWeekDays(todayIso(), weekOffset), [weekOffset]);
@@ -32,8 +33,11 @@ export default function PrintWeekPage() {
     try {
       const evRaw = window.localStorage.getItem("mockEvents");
       const taskRaw = window.localStorage.getItem("mockTasks");
-      const baseEvents: Event[] = evRaw ? JSON.parse(evRaw) : [];
-      const baseTasks: Task[] = taskRaw ? JSON.parse(taskRaw) : [];
+      const baseEvents: Event[] = evRaw ? JSON.parse(evRaw) : initialEvents;
+      const baseTasks: Task[] = taskRaw ? JSON.parse(taskRaw) : initialTasks;
+
+      setEvents(baseEvents);
+      setTasks(baseTasks);
 
       const favRaw = window.localStorage.getItem("hsFavorites");
       const examRaw = window.localStorage.getItem("hsExamEntries");
@@ -70,21 +74,21 @@ export default function PrintWeekPage() {
           });
         });
       }
-
-      setEvents([...baseEvents.filter((e) => !e.id?.startsWith?.("hs-")), ...admission]);
-      setTasks(baseTasks);
+      setAdmissionEvents(admission);
     } catch (e) {
       console.warn("print-week load error", e);
     }
   }, []);
 
+  const combinedEvents = useMemo(() => [...events, ...admissionEvents], [events, admissionEvents]);
+
   const eventsByDay = useMemo(() => {
-    return events.reduce<Record<string, Event[]>>((acc, ev) => {
+    return combinedEvents.reduce<Record<string, Event[]>>((acc, ev) => {
       if (!acc[ev.date]) acc[ev.date] = [];
       acc[ev.date].push(ev);
       return acc;
     }, {});
-  }, [events]);
+  }, [combinedEvents]);
 
   const tasksByDay = useMemo(() => {
     return tasks.reduce<Record<string, Task[]>>((acc, t) => {
@@ -188,6 +192,40 @@ export default function PrintWeekPage() {
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
+const initialEvents: Event[] = [
+  {
+    id: "e1",
+    title: "模試 (英語)",
+    date: todayIso(),
+    timeRange: "09:00 - 11:00",
+    location: "市民ホール",
+    tag: "模試",
+    tagColor: "bg-blue-100 text-blue-700",
+  },
+  {
+    id: "e2",
+    title: "塾 面談",
+    date: addDaysString(new Date(), 1),
+    timeRange: "18:00 - 18:45",
+    location: "塾本校",
+    tag: "塾",
+    tagColor: "bg-indigo-100 text-indigo-700",
+  },
+  {
+    id: "e3",
+    title: "本番試験A",
+    date: addDaysString(new Date(), 3),
+    timeRange: "08:30 - 12:00",
+    location: "大学キャンパスA",
+    tag: "試験",
+    tagColor: "bg-red-100 text-red-700",
+  },
+];
+const initialTasks: Task[] = [
+  { id: "t1", title: "受験票印刷", due: addDaysString(new Date(), 1), status: "進行中" },
+  { id: "t2", title: "持ち物チェック", due: addDaysString(new Date(), 2), status: "未対応" },
+  { id: "t3", title: "会場アクセス確認", due: addDaysString(new Date(), 2), status: "完了" },
+];
 function addDaysString(base: Date, days: number) {
   const d = new Date(base);
   d.setDate(d.getDate() + days);

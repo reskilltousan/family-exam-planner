@@ -73,6 +73,7 @@ export default function MockPage() {
   const [familyId, setFamilyId] = useState<string>(process.env.NEXT_PUBLIC_DEFAULT_FAMILY_ID ?? "");
   const [members, setMembers] = useState<Member[]>(defaultMembers);
   const [events, setEvents] = useState<Event[]>(initialEvents);
+  const [admissionEvents, setAdmissionEvents] = useState<Event[]>([]);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [message, setMessage] = useState<string>("");
   const [createForm, setCreateForm] = useState({
@@ -89,13 +90,15 @@ export default function MockPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const weekDays = useMemo(() => buildWeekDays(todayIso(), weekOffset), [weekOffset]);
+  const combinedEvents = useMemo(() => [...events, ...admissionEvents], [events, admissionEvents]);
+
   const groupedEvents = useMemo(() => {
-    return events.reduce<Record<string, Event[]>>((acc, ev) => {
+    return combinedEvents.reduce<Record<string, Event[]>>((acc, ev) => {
       if (!acc[ev.date]) acc[ev.date] = [];
       acc[ev.date].push(ev);
       return acc;
     }, {});
-  }, [events]);
+  }, [combinedEvents]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
@@ -121,6 +124,38 @@ export default function MockPage() {
       console.warn("familyMembers localStorage parse error", e);
     }
   }, []);
+
+  // 事前に保存したイベント/タスクを読み込み（なければ初期データ）
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const evRaw = window.localStorage.getItem("mockEvents");
+      const taskRaw = window.localStorage.getItem("mockTasks");
+      if (evRaw) queueMicrotask(() => setEvents(JSON.parse(evRaw)));
+      if (taskRaw) queueMicrotask(() => setTasks(JSON.parse(taskRaw)));
+    } catch (e) {
+      console.warn("load mock events/tasks error", e);
+    }
+  }, []);
+
+  // イベント/タスクをローカル保存（入試自動生成イベントは保存しない）
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("mockEvents", JSON.stringify(events));
+    } catch (e) {
+      console.warn("save events error", e);
+    }
+  }, [events]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("mockTasks", JSON.stringify(tasks));
+    } catch (e) {
+      console.warn("save tasks error", e);
+    }
+  }, [tasks]);
 
   // お気に入り学校の入試日程（/highschools で保存したローカルデータ）をイベントとして追加
   useEffect(() => {
@@ -164,12 +199,7 @@ export default function MockPage() {
         });
       });
 
-      if (generated.length) {
-        setEvents((prev) => {
-          const base = prev.filter((e) => !e.id.startsWith("hs-"));
-          return [...base, ...generated];
-        });
-      }
+      setAdmissionEvents(generated);
     } catch (e) {
       console.warn("hs exam events parse error", e);
     }
