@@ -5,6 +5,7 @@
 - 2025-12-10: 受験情報ページ `/exam` をAPI連携版に更新（/api/exam モック取得＋読み込み/エラーハンドリング付き、Passnavi風UI）。
 - 2025-12-10: 家族設定ページ `/family/setup` を再設計（家族名/連絡先/タイムゾーン/メンバー役割・カラー編集、追加・削除、ローカル保存）。
 - 2025-12-10: メール用サインイン画面 `/signin/email` を追加（メール/パスワード入力＋既存APIでログイン、他の方法への導線付き）。
+- 2025-12-10: 高校データ収集の下ごしらえ（協会一覧パーサ、北海道学校一覧パーサ、/api/highschool/associations・/api/highschool/hokkaido 追加）。
 - 2025-12-10: サインイン専用ページ `/signin` を追加（Google/Apple/GitHub ボタン＋メールサインイン導線）。/auth はメール登録・ログインフォームを復活（メンバー入力含む）。
 - 2025-12-10: /auth に外部ログイン（Google/Apple/GitHub）を残しつつ、メール/パスワード＋メンバー登録フォームを復活。API失敗時はローカルfamilyIdをフォールバック。
 - 2025-12-10: next-auth で Google/Apple/GitHub 外部ログインに移行 (/api/auth/[...nextauth], /auth はプロバイダボタン表示)。

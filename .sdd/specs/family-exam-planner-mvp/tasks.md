@@ -3,6 +3,7 @@
 - Phase 1 (MVP): セクション1?4
 - スクレイプ用ひな型を追加（`exam-scraper.ts` に ETag/If-Modified-Since 付き取得、`exam-parser.ts` に抽出インターフェース）。
 - 受験情報ページ `/exam` をAPI連携版に更新（/api/exam モック取得＋読み込み/エラーハンドリング付き、Passnavi風UI）。
+- 高校データ収集の下ごしらえ（協会一覧パーサ、北海道学校一覧パーサ、/api/highschool/associations・/api/highschool/hokkaido 追加）。
 - 家族設定ページ `/family/setup` を再設計（家族名/連絡先/タイムゾーン/メンバー役割・カラー編集、追加・削除、ローカル保存）。
 - メール用サインイン画面 `/signin/email` を追加（メール/パスワード入力＋既存APIでログイン、他の方法への導線付き）。
 - サインイン専用ページ `/signin` を追加（Google/Apple/GitHub ボタン＋メールサインイン導線）。/auth はメール登録・ログインフォームを復活（メンバー入力含む）。
