@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type School = {
@@ -132,6 +133,12 @@ export default function HighschoolPage() {
             <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">
               お気に入り＝タスク連携候補
             </span>
+            <Link
+              href="/"
+              className="ml-auto rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+            >
+              トップへ戻る
+            </Link>
           </div>
           <p className="text-sm text-zinc-500">
             学校名と公式サイト/詳細ページのみを扱います。詳細は各校サイトで確認してください。
