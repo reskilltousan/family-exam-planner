@@ -121,6 +121,59 @@ export default function MockPage() {
     }
   }, []);
 
+  // お気に入り学校の入試日程（/highschools で保存したローカルデータ）をイベントとして追加
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const favRaw = window.localStorage.getItem("hsFavorites");
+      const examRaw = window.localStorage.getItem("hsExamEntries");
+      if (!favRaw || !examRaw) return;
+      const favs = JSON.parse(favRaw) as Record<string, boolean>;
+      const exams = JSON.parse(examRaw) as Record<string, any[]>;
+      const generated: Event[] = [];
+
+      Object.entries(favs).forEach(([key, isFav]) => {
+        if (!isFav) return;
+        const entries = exams[key];
+        if (!Array.isArray(entries) || !entries.length) return;
+        const parts = key.split(":");
+        const schoolName = parts[2] ?? "学校";
+        entries.forEach((entry) => {
+          const baseId = `${key}:${entry.id}`;
+          const suffix = entry.kind ? ` (${entry.kind})` : "";
+          const courseLabel = entry.course ? ` ${entry.course}` : "";
+          const addEvent = (date: string | null, label: string) => {
+            if (!date) return;
+            generated.push({
+              id: `hs-${baseId}-${label}`,
+              title: `${schoolName}${courseLabel} ${label}${suffix}`,
+              date,
+              timeRange: "終日",
+              location: schoolName,
+              members: [],
+              tag: "入試",
+              tagColor: "bg-red-100 text-red-700",
+            });
+          };
+          addEvent(entry.applyStart, "願書受付開始");
+          addEvent(entry.applyEnd, "願書締切");
+          addEvent(entry.examDate, "試験日");
+          addEvent(entry.resultDate, "合格発表");
+          addEvent(entry.procedureDeadline, "入学手続締切");
+        });
+      });
+
+      if (generated.length) {
+        setEvents((prev) => {
+          const base = prev.filter((e) => !e.id.startsWith("hs-"));
+          return [...base, ...generated];
+        });
+      }
+    } catch (e) {
+      console.warn("hs exam events parse error", e);
+    }
+  }, []);
+
   const [order, setOrder] = useState<SectionKey[]>(["quick", "week", "tasks", "events"]);
   const [dragging, setDragging] = useState<SectionKey | null>(null);
   const [over, setOver] = useState<SectionKey | null>(null);
