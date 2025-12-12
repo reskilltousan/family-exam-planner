@@ -367,6 +367,12 @@ export default function MockPage() {
           >
             受験先登録
           </Link>
+          <Link
+            href="/print-week"
+            className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+          >
+            週次PDF出力
+          </Link>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
