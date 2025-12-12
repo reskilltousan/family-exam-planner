@@ -17,6 +17,8 @@ export type SchoolRow = {
   area: string | null;
   category: string | null;
   attributes: string[];
+  address?: string | null;
+  phone?: string | null;
 };
 
 export function parseAssociationTable(html: string): AssociationRow[] {
@@ -69,9 +71,57 @@ export function parseHokkaidoSchools(html: string): SchoolRow[] {
           area,
           category,
           attributes,
+          address: null,
+          phone: null,
         });
       }
     }
+  }
+  return schools;
+}
+
+/**
+ * 東京私学協会の会員校一覧ページ（中学/高校）向けパーサ。
+ * 想定URL:
+ *  - 中学: https://www.tokyoshigaku.com/schools/
+ *  - 高校: https://www.tokyoshigaku.com/schools/highschool.html
+ *
+ * 形式が比較的素朴なため、見出し<h2>単位で切り出し、
+ *  - 見出しテキスト: 学校名
+ *  - 直後の a[href] (Web site) をサイトURL
+ *  - 「〒」を含む行を住所
+ *  - 住所以降に登場する電話番号行を電話
+ */
+export function parseTokyoSchools(html: string): SchoolRow[] {
+  const schools: SchoolRow[] = [];
+  const headingRe = /<h2[^>]*>([\s\S]*?)<\/h2>/gi;
+  const matches: { nameRaw: string; start: number; end: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = headingRe.exec(html))) {
+    const nameRaw = m[1] ?? "";
+    const start = m.index ?? 0;
+    matches.push({ nameRaw, start, end: 0 });
+  }
+  for (let i = 0; i < matches.length; i++) {
+    matches[i].end = i + 1 < matches.length ? matches[i + 1].start : html.length;
+  }
+
+  for (const item of matches) {
+    const chunk = html.slice(item.start, item.end);
+    const name = cleanText(item.nameRaw);
+    const websiteMatch = chunk.match(/<a[^>]+href="([^"]+)"[^>]*>\s*(?:Web site|WEBサイト)/i);
+    const addressMatch = chunk.match(/〒[\s\S]*?(?:(?:<br\s*\/?>)|\n)/i);
+    const telMatch = chunk.match(/(?:TEL[:：]?|電話[:：]?)\s*([\d（）\(\)\-\s]+)|\b0\d{1,3}[-－]?\d{2,4}[-－]?\d{3,4}\b/);
+    schools.push({
+      name,
+      website: websiteMatch ? normalizeUrl(websiteMatch[1]) : null,
+      map: null,
+      area: null,
+      category: null,
+      attributes: [],
+      address: addressMatch ? cleanText(addressMatch[0]) : null,
+      phone: telMatch ? cleanText(telMatch[1] || telMatch[0]) : null,
+    });
   }
   return schools;
 }
