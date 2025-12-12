@@ -359,19 +359,13 @@ export default function MockPage() {
           カードをドラッグ＆ドロップして、お好きな配置に並べ替えできます。
         </div>
 
-        <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
           <span className="text-xs font-semibold text-zinc-500">受験ナビゲーション</span>
           <Link
-            href="/highschools"
+            href="/destinations"
             className="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
           >
-            受験校検索（入試日程メモ）
-          </Link>
-          <Link
-            href="/exam"
-            className="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
-          >
-            大学受験情報（Passnavi風）
+            受験先登録
           </Link>
         </div>
 
