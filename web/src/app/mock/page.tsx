@@ -5,6 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, GripVertical, MapPin, Plus, Tag, User } from "lucide-react";
 
 type Member = { id: string; name: string; color: string };
+type Attachment = {
+  id: string;
+  targetType: "event" | "task";
+  targetId: string;
+  targetTitle: string;
+  name: string;
+  url: string;
+  createdAt: string;
+};
 type Event = {
   id: string;
   title: string;
@@ -75,6 +84,7 @@ export default function MockPage() {
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [admissionEvents, setAdmissionEvents] = useState<Event[]>([]);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [message, setMessage] = useState<string>("");
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -101,6 +111,13 @@ export default function MockPage() {
   }, [combinedEvents]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const attachmentsByTarget = useMemo(() => {
+    return attachments.reduce<Record<string, Attachment[]>>((acc, a) => {
+      if (!acc[a.targetId]) acc[a.targetId] = [];
+      acc[a.targetId].push(a);
+      return acc;
+    }, {});
+  }, [attachments]);
 
   // 認証ページで保存した family メンバー名があれば反映
   useEffect(() => {
@@ -133,6 +150,8 @@ export default function MockPage() {
       const taskRaw = window.localStorage.getItem("mockTasks");
       if (evRaw) queueMicrotask(() => setEvents(JSON.parse(evRaw)));
       if (taskRaw) queueMicrotask(() => setTasks(JSON.parse(taskRaw)));
+      const attRaw = window.localStorage.getItem("attachments");
+      if (attRaw) queueMicrotask(() => setAttachments(JSON.parse(attRaw)));
     } catch (e) {
       console.warn("load mock events/tasks error", e);
     }
@@ -156,6 +175,14 @@ export default function MockPage() {
       console.warn("save tasks error", e);
     }
   }, [tasks]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("attachments", JSON.stringify(attachments));
+    } catch (e) {
+      console.warn("save attachments error", e);
+    }
+  }, [attachments]);
 
   // お気に入り学校の入試日程（/highschools で保存したローカルデータ）をイベントとして追加
   useEffect(() => {
@@ -338,6 +365,12 @@ export default function MockPage() {
   function handleUpdateTask(update: Task) {
     setTasks((prev) => prev.map((t) => (t.id === update.id ? update : t)));
   }
+  function handleAddAttachment(entry: Attachment) {
+    setAttachments((prev) => [...prev, entry]);
+  }
+  function handleRemoveAttachment(id: string) {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }
 
   const handleDrop = (source: SectionKey, target: SectionKey) => {
     if (source === target) return;
@@ -433,6 +466,32 @@ export default function MockPage() {
             );
           })}
         </div>
+
+        <Card>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold">添付ファイル一覧</div>
+              <div className="text-xs text-zinc-500">イベント/タスクに紐づけたファイルリンクをまとめて表示します</div>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {attachments.length === 0 && <div className="text-xs text-zinc-400">添付はありません</div>}
+            {attachments.map((a) => (
+              <div key={a.id} className="rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-zinc-800">{a.name}</div>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-zinc-500">
+                    {a.targetType === "event" ? "イベント" : "タスク"}
+                  </span>
+                </div>
+                <div className="text-[11px] text-zinc-500 truncate">{a.targetTitle}</div>
+                <a href={a.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-700">
+                  {a.url}
+                </a>
+              </div>
+            ))}
+          </div>
+        </Card>
       </main>
       <DetailSheet
         key={selectedEvent?.id ?? selectedTask?.id ?? "detail-none"}
@@ -441,6 +500,9 @@ export default function MockPage() {
         members={members}
         onSaveEvent={handleUpdateEvent}
         onSaveTask={handleUpdateTask}
+        attachments={attachments}
+        onAddAttachment={handleAddAttachment}
+        onRemoveAttachment={handleRemoveAttachment}
         onClose={() => {
           setSelectedEvent(null);
           setSelectedTask(null);
@@ -469,6 +531,9 @@ function DetailSheet({
   members,
   onSaveEvent,
   onSaveTask,
+  attachments,
+  onAddAttachment,
+  onRemoveAttachment,
 }: {
   event?: Event | null;
   task?: Task | null;
@@ -476,6 +541,9 @@ function DetailSheet({
   members: Member[];
   onSaveEvent: (ev: Event) => void;
   onSaveTask: (task: Task) => void;
+  attachments: Attachment[];
+  onAddAttachment: (a: Attachment) => void;
+  onRemoveAttachment: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [formEvent, setFormEvent] = useState(() => {
@@ -494,6 +562,10 @@ function DetailSheet({
   }, [onClose, editing]);
 
   const isEvent = !!event;
+  const targetId = event?.id ?? task?.id ?? "";
+  const targetTitle = event?.title ?? task?.title ?? "";
+  const attachmentList = attachments.filter((a) => a.targetId === targetId);
+  const [attForm, setAttForm] = useState({ name: "", url: "" });
   if (!event && !task) return null;
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 px-4 py-8">
@@ -711,6 +783,67 @@ function DetailSheet({
             )}
           </div>
         )}
+
+        <div className="mt-4 space-y-2">
+          <div className="text-xs font-semibold text-zinc-600">添付ファイル（Google Drive等のURLを貼付）</div>
+          <div className="space-y-2">
+            {attachmentList.map((a) => (
+              <div
+                key={a.id}
+                className="flex items-center justify-between rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs"
+              >
+                <div className="truncate">
+                  <div className="truncate font-semibold text-zinc-800">{a.name}</div>
+                  <a href={a.url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-700">
+                    {a.url}
+                  </a>
+                </div>
+                <button
+                  onClick={() => onRemoveAttachment(a.id)}
+                  className="rounded-full px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50"
+                >
+                  削除
+                </button>
+              </div>
+            ))}
+            {attachmentList.length === 0 && <div className="text-xs text-zinc-400">添付はありません</div>}
+          </div>
+          {targetId && (
+            <div className="space-y-2 rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-3">
+              <div className="text-[11px] font-semibold text-zinc-500">添付を追加</div>
+              <input
+                className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="ファイル名（例: 願書PDF）"
+                value={attForm.name}
+                onChange={(e) => setAttForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <input
+                className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="URL（Google Drive共有リンクなど）"
+                value={attForm.url}
+                onChange={(e) => setAttForm((f) => ({ ...f, url: e.target.value }))}
+              />
+              <button
+                onClick={() => {
+                  if (!attForm.name.trim() || !attForm.url.trim()) return;
+                  onAddAttachment({
+                    id: crypto.randomUUID(),
+                    targetType: isEvent ? "event" : "task",
+                    targetId,
+                    targetTitle,
+                    name: attForm.name.trim(),
+                    url: attForm.url.trim(),
+                    createdAt: new Date().toISOString(),
+                  });
+                  setAttForm({ name: "", url: "" });
+                }}
+                className="rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90"
+              >
+                追加
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
