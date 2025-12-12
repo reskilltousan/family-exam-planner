@@ -5,6 +5,7 @@
 - 受験情報ページ `/exam` をAPI連携版に更新（/api/exam モック取得＋読み込み/エラーハンドリング付き、Passnavi風UI）。
 - 高校データ収集の下ごしらえ（協会一覧パーサ、北海道学校一覧パーサ、/api/highschool/associations・/api/highschool/hokkaido 追加）。
 - 埼玉県の学校一覧をテキストリンクから抽出するパーサとAPI `/api/highschool/saitama` を追加。
+- 千葉県の学校一覧を抽出するパーサとAPI `/api/highschool/chiba?level=high|junior` を追加。
 - 家族設定ページ `/family/setup` を再設計（家族名/連絡先/タイムゾーン/メンバー役割・カラー編集、追加・削除、ローカル保存）。
 - メール用サインイン画面 `/signin/email` を追加（メール/パスワード入力＋既存APIでログイン、他の方法への導線付き）。
 - サインイン専用ページ `/signin` を追加（Google/Apple/GitHub ボタン＋メールサインイン導線）。/auth はメール登録・ログインフォームを復活（メンバー入力含む）。

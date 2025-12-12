@@ -7,6 +7,7 @@
 - 2025-12-10: メール用サインイン画面 `/signin/email` を追加（メール/パスワード入力＋既存APIでログイン、他の方法への導線付き）。
 - 2025-12-10: 高校データ収集の下ごしらえ（協会一覧パーサ、北海道学校一覧パーサ、/api/highschool/associations・/api/highschool/hokkaido 追加）。
 - 2025-12-12: 埼玉県学校一覧をテキストリンクから抽出するパーサとAPI `/api/highschool/saitama` を追加。
+- 2025-12-12: 千葉県学校一覧を抽出するパーサとAPI `/api/highschool/chiba?level=high|junior` を追加。
 - 2025-12-10: サインイン専用ページ `/signin` を追加（Google/Apple/GitHub ボタン＋メールサインイン導線）。/auth はメール登録・ログインフォームを復活（メンバー入力含む）。
 - 2025-12-10: /auth に外部ログイン（Google/Apple/GitHub）を残しつつ、メール/パスワード＋メンバー登録フォームを復活。API失敗時はローカルfamilyIdをフォールバック。
 - 2025-12-10: next-auth で Google/Apple/GitHub 外部ログインに移行 (/api/auth/[...nextauth], /auth はプロバイダボタン表示)。

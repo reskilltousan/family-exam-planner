@@ -162,6 +162,47 @@ export function parseSaitamaSchools(html: string): SchoolRow[] {
   return schools;
 }
 
+/**
+ * 千葉県私学協会 学校一覧ページ（高校/中学共通のレイアウト）向けパーサ。
+ * 想定URL:
+ *  - 高校: https://chibashigaku.jp/hs/school_type/school_phs/
+ *  - 中学: https://chibashigaku.jp/hs/school_type/school_pjhs/
+ *
+ * 形式: 「## 私立高等学校一覧」以下に "### 学校名" のブロックが連続。
+ * 各ブロック内に「エリア」行と属性リンク（共学校/女子校/全日制/通信制/中高一貫など）がある。
+ * 「詳しく見る」のリンクを website として保持する（公式サイトではなく詳細ページ）。
+ */
+export function parseChibaSchools(html: string, categoryLabel: string | null): SchoolRow[] {
+  const schools: SchoolRow[] = [];
+  const re = /###\s*([^#\n]+)\s*([\s\S]*?)(?=^\d+\.\s*###|\Z)/gim;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const name = cleanText(m[1]);
+    const block = m[2] ?? "";
+    const areaMatch = block.match(/エリア/);
+    let area: string | null = null;
+    if (areaMatch) {
+      const line = block.slice(areaMatch.index ?? 0, (block.indexOf("\n", areaMatch.index ?? 0) + 1) || undefined);
+      area = cleanText(line);
+    }
+    const attrMatches = [...block.matchAll(/\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g)];
+    const attributes = attrMatches.map((am) => cleanText(am[1])).filter(Boolean);
+    const detailMatch = block.match(/詳しく見る\]\((https?:\/\/[^\)]+)\)/i);
+    const website = detailMatch ? normalizeUrl(detailMatch[1]) : null;
+    schools.push({
+      name,
+      website,
+      map: null,
+      area,
+      category: categoryLabel,
+      attributes,
+      address: null,
+      phone: null,
+    });
+  }
+  return schools;
+}
+
 function sliceByMarkers(source: string, markers: string[]) {
   const result: { label: string | null; content: string }[] = [];
   const positions: { label: string; index: number }[] = [];
