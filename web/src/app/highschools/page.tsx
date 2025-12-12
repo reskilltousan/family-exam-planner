@@ -49,7 +49,11 @@ export default function HighschoolPage() {
   const [error, setError] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [keyword, setKeyword] = useState("");
-  const [examModal, setExamModal] = useState<{ open: boolean; school: School | null }>({ open: false, school: null });
+  const [examModal, setExamModal] = useState<{ open: boolean; school: School | null; editable: boolean }>({
+    open: false,
+    school: null,
+    editable: false,
+  });
   const [examData, setExamData] = useState<Record<string, ExamEntry[]>>({});
 
   useEffect(() => {
@@ -194,20 +198,24 @@ export default function HighschoolPage() {
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={() => toggleFavorite(s.name)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${
-                    isFav ? "bg-amber-500 text-white" : "bg-zinc-900 text-white"
-                  } hover:opacity-90`}
-                >
-                  {isFav ? "お気に入り済み" : "お気に入りに追加"}
-                </button>
-                <button
-                  onClick={() => setExamModal({ open: true, school: s })}
-                  className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm ring-1 ring-blue-100 hover:bg-blue-100"
-                >
-                  入試日程を管理
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => toggleFavorite(s.name)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${
+                      isFav ? "bg-amber-500 text-white" : "bg-zinc-900 text-white"
+                    } hover:opacity-90`}
+                  >
+                    {isFav ? "お気に入り済み" : "お気に入りに追加"}
+                  </button>
+                  {isFav && (
+                    <button
+                      onClick={() => setExamModal({ open: true, school: s, editable: false })}
+                      className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm ring-1 ring-blue-100 hover:bg-blue-100"
+                    >
+                      入試日程を確認/編集
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
                 {s.attributes.map((a) => (
@@ -240,11 +248,17 @@ export default function HighschoolPage() {
           school={examModal.school}
           pref={pref}
           level={level}
-          onClose={() => setExamModal({ open: false, school: null })}
+          editable={examModal.editable}
+          onRequestEdit={() => {
+            if (confirm("公式サイトに最新情報があるか確認してください。手動で修正しますか？")) {
+              setExamModal((prev) => ({ ...prev, editable: true }));
+            }
+          }}
+          onClose={() => setExamModal({ open: false, school: null, editable: false })}
           existing={examData[getExamKey(examModal.school)] ?? []}
           onSave={(entries) => {
             handleExamSave(getExamKey(examModal.school!), entries);
-            setExamModal({ open: false, school: null });
+            setExamModal({ open: false, school: null, editable: false });
           }}
         />
       )}
@@ -256,6 +270,8 @@ function ExamModal({
   school,
   pref,
   level,
+  editable,
+  onRequestEdit,
   existing,
   onClose,
   onSave,
@@ -263,6 +279,8 @@ function ExamModal({
   school: School;
   pref: string;
   level: "junior" | "high" | null;
+  editable: boolean;
+  onRequestEdit: () => void;
   existing: ExamEntry[];
   onClose: () => void;
   onSave: (entries: ExamEntry[]) => void;
@@ -331,53 +349,86 @@ function ExamModal({
                   className="min-w-[140px] flex-1 rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   placeholder="コース・区分（例: 普通科 / 国際科）"
                   value={row.course}
-                  onChange={(e) => update(row.id, { course: e.target.value })}
+                  onChange={(e) => editable && update(row.id, { course: e.target.value })}
+                  disabled={!editable}
                 />
                 <input
                   className="min-w-[120px] rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   placeholder="入試種類（例: 推薦A/一般）"
                   value={row.kind}
-                  onChange={(e) => update(row.id, { kind: e.target.value })}
+                  onChange={(e) => editable && update(row.id, { kind: e.target.value })}
+                  disabled={!editable}
                 />
-                <button
-                  onClick={() => removeRow(row.id)}
-                  className="rounded-full px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
-                >
-                  削除
-                </button>
+                {editable && (
+                  <button
+                    onClick={() => removeRow(row.id)}
+                    className="rounded-full px-3 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                  >
+                    削除
+                  </button>
+                )}
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <DateField label="願書受付開始" value={row.applyStart} onChange={(v) => update(row.id, { applyStart: v })} />
-                <DateField label="願書締切" value={row.applyEnd} onChange={(v) => update(row.id, { applyEnd: v })} />
-                <DateField label="試験日" value={row.examDate} onChange={(v) => update(row.id, { examDate: v })} />
-                <DateField label="合格発表日" value={row.resultDate} onChange={(v) => update(row.id, { resultDate: v })} />
+                <DateField
+                  label="願書受付開始"
+                  value={row.applyStart}
+                  onChange={(v) => update(row.id, { applyStart: v })}
+                  disabled={!editable}
+                />
+                <DateField
+                  label="願書締切"
+                  value={row.applyEnd}
+                  onChange={(v) => update(row.id, { applyEnd: v })}
+                  disabled={!editable}
+                />
+                <DateField label="試験日" value={row.examDate} onChange={(v) => update(row.id, { examDate: v })} disabled={!editable} />
+                <DateField
+                  label="合格発表日"
+                  value={row.resultDate}
+                  onChange={(v) => update(row.id, { resultDate: v })}
+                  disabled={!editable}
+                />
                 <DateField
                   label="入学手続締切"
                   value={row.procedureDeadline}
                   onChange={(v) => update(row.id, { procedureDeadline: v })}
+                  disabled={!editable}
                 />
                 <input
                   className="rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   placeholder="募集要項URL（任意）"
                   value={row.noteUrl ?? ""}
-                  onChange={(e) => update(row.id, { noteUrl: e.target.value || null })}
+                  onChange={(e) => editable && update(row.id, { noteUrl: e.target.value || null })}
+                  disabled={!editable}
                 />
               </div>
             </div>
           ))}
           <div className="flex gap-2">
-            <button
-              onClick={addRow}
-              className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-            >
-              行を追加
-            </button>
-            <button
-              onClick={() => onSave(draft)}
-              className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
-            >
-              保存
-            </button>
+            {!editable && (
+              <button
+                onClick={onRequestEdit}
+                className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+              >
+                編集する
+              </button>
+            )}
+            {editable && (
+              <>
+                <button
+                  onClick={addRow}
+                  className="rounded-full bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+                >
+                  行を追加
+                </button>
+                <button
+                  onClick={() => onSave(draft)}
+                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90"
+                >
+                  保存
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -385,7 +436,17 @@ function ExamModal({
   );
 }
 
-function DateField({ label, value, onChange }: { label: string; value: string | null; onChange: (v: string | null) => void }) {
+function DateField({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (v: string | null) => void;
+  disabled?: boolean;
+}) {
   return (
     <label className="flex flex-col gap-1 text-xs font-semibold text-zinc-600">
       {label}
@@ -394,6 +455,7 @@ function DateField({ label, value, onChange }: { label: string; value: string | 
         className="rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
+        disabled={disabled}
       />
     </label>
   );
