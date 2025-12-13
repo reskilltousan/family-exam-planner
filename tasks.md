@@ -1,5 +1,9 @@
 # 進行状況メモ（family-exam-planner）
 
+### 最新の作業
+- [X] コード破損からの復旧: `mock/page.tsx` を手動復元し、`feature/new-page-rework` で `npm run dev` 正常確認。
+- [X] 環境安定化: 復旧内容と新規 API ファイルをコミット済み（ブランチ `feature/new-page-rework`）。
+
 ## 直近の実装履歴（抜粋）
 - 2025-12-10: スクレイプ用ひな型を追加（`exam-scraper.ts` に ETag/If-Modified-Since 付き取得、`exam-parser.ts` に抽出インターフェース）。
 - 2025-12-10: 受験情報ページ `/exam` をAPI連携版に更新（/api/exam モック取得＋読み込み/エラーハンドリング付き、Passnavi風UI）。
