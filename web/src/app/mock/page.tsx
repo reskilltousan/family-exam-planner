@@ -14,6 +14,13 @@ type Attachment = {
   url: string;
   createdAt: string;
 };
+type EventNote = {
+  id: string;
+  eventId: string;
+  content: string;
+  createdAt: string;
+  createdBy?: string | null;
+};
 type Event = {
   id: string;
   title: string;
@@ -85,6 +92,10 @@ export default function MockPage() {
   const [admissionEvents, setAdmissionEvents] = useState<Event[]>([]);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [notes, setNotes] = useState<EventNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteMessage, setNoteMessage] = useState("");
   const [message, setMessage] = useState<string>("");
   const [createForm, setCreateForm] = useState({
     title: "",
@@ -118,6 +129,41 @@ export default function MockPage() {
       return acc;
     }, {});
   }, [attachments]);
+
+  useEffect(() => {
+    if (!selectedEvent) {
+      setNotes([]);
+      return;
+    }
+    setNoteMessage("");
+    setNotesLoading(true);
+    (async () => {
+      try {
+        if (!familyId) {
+          const raw = typeof window !== "undefined" ? window.localStorage.getItem("eventNotes") : null;
+          if (raw) {
+            const map = JSON.parse(raw) as Record<string, EventNote[]>;
+            setNotes(map[selectedEvent.id] ?? []);
+          } else {
+            setNotes([]);
+          }
+          return;
+        }
+        const qs = `?familyId=${encodeURIComponent(familyId)}`;
+        const res = await fetch(`/api/events/${selectedEvent.id}/notes${qs}`, {
+          headers: { "x-family-id": familyId },
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`failed to load notes: ${res.status}`);
+        const data = (await res.json()) as EventNote[];
+        setNotes(data);
+      } catch (e) {
+        setNoteMessage((e as Error).message);
+      } finally {
+        setNotesLoading(false);
+      }
+    })();
+  }, [selectedEvent?.id, familyId]);
 
   // 認証ページで保存した family メンバー名があれば反映
   useEffect(() => {
@@ -365,6 +411,65 @@ export default function MockPage() {
   function handleUpdateTask(update: Task) {
     setTasks((prev) => prev.map((t) => (t.id === update.id ? update : t)));
   }
+
+  function persistLocalNotes(eventId: string, data: EventNote[]) {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("eventNotes");
+      const map = raw ? (JSON.parse(raw) as Record<string, EventNote[]>) : {};
+      map[eventId] = data;
+      window.localStorage.setItem("eventNotes", JSON.stringify(map));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleAddNote(content: string): Promise<boolean> {
+    if (!selectedEvent) {
+      setNoteMessage("イベントを選択してください");
+      return false;
+    }
+    const text = content.trim();
+    if (!text) {
+      setNoteMessage("メモを入力してください");
+      return false;
+    }
+    setNoteSaving(true);
+    try {
+      if (!familyId) {
+        const newNote: EventNote = {
+          id: crypto.randomUUID(),
+          eventId: selectedEvent.id,
+          content: text,
+          createdAt: new Date().toISOString(),
+        };
+        setNotes((prev) => {
+          const next = [newNote, ...prev];
+          persistLocalNotes(selectedEvent.id, next);
+          return next;
+        });
+        return true;
+      }
+      const qs = `?familyId=${encodeURIComponent(familyId)}`;
+      const res = await fetch(`/api/events/${selectedEvent.id}/notes${qs}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-family-id": familyId,
+        },
+        body: JSON.stringify({ content: text }),
+      });
+      if (!res.ok) throw new Error(`note save failed: ${res.status}`);
+      const note = (await res.json()) as EventNote;
+      setNotes((prev) => [note, ...prev]);
+      return true;
+    } catch (e) {
+      setNoteMessage((e as Error).message);
+      return false;
+    } finally {
+      setNoteSaving(false);
+    }
+  }
   function handleAddAttachment(entry: Attachment) {
     setAttachments((prev) => [...prev, entry]);
   }
@@ -503,6 +608,12 @@ export default function MockPage() {
         attachments={attachments}
         onAddAttachment={handleAddAttachment}
         onRemoveAttachment={handleRemoveAttachment}
+        notes={notes}
+        notesLoading={notesLoading}
+        noteSaving={noteSaving}
+        noteMessage={noteMessage}
+        onAddNote={handleAddNote}
+        setNoteMessage={setNoteMessage}
         onClose={() => {
           setSelectedEvent(null);
           setSelectedTask(null);
@@ -534,6 +645,12 @@ function DetailSheet({
   attachments,
   onAddAttachment,
   onRemoveAttachment,
+  notes,
+  notesLoading,
+  noteSaving,
+  noteMessage,
+  onAddNote,
+  setNoteMessage,
 }: {
   event?: Event | null;
   task?: Task | null;
@@ -544,6 +661,12 @@ function DetailSheet({
   attachments: Attachment[];
   onAddAttachment: (a: Attachment) => void;
   onRemoveAttachment: (id: string) => void;
+  notes: EventNote[];
+  notesLoading: boolean;
+  noteSaving: boolean;
+  noteMessage: string;
+  onAddNote: (content: string) => Promise<boolean>;
+  setNoteMessage: (msg: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [formEvent, setFormEvent] = useState(() => {
@@ -552,6 +675,8 @@ function DetailSheet({
     return { ...event, start, end };
   });
   const [formTask, setFormTask] = useState(() => (task ? { ...task } : null));
+  const [noteInput, setNoteInput] = useState("");
+  const stampPresets = ["Good job!", "がんばった！", "ナイスアイデア"];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -844,6 +969,65 @@ function DetailSheet({
             </div>
           )}
         </div>
+
+        {isEvent && (
+          <div className="mt-4 space-y-2">
+            <div className="text-xs font-semibold text-zinc-600">メモ / モチベーション</div>
+            <div className="space-y-2 rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-3">
+              {noteMessage && <div className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-700">{noteMessage}</div>}
+              <textarea
+                className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                rows={3}
+                placeholder="今日の様子やメモを残す / 子どもへのメッセージを書く"
+                value={noteInput}
+                onChange={(e) => {
+                  setNoteInput(e.target.value);
+                  if (noteMessage) setNoteMessage("");
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                {stampPresets.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    disabled={noteSaving}
+                    onClick={async () => {
+                      const ok = await onAddNote(preset);
+                      if (ok) setNoteInput("");
+                    }}
+                    className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-zinc-700 shadow-[0_1px_2px_rgba(0,0,0,0.06)] hover:bg-zinc-100 disabled:opacity-50"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <button
+                disabled={noteSaving}
+                onClick={async () => {
+                  const ok = await onAddNote(noteInput);
+                  if (ok) setNoteInput("");
+                }}
+                className="rounded-full bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+              >
+                {noteSaving ? "保存中..." : "メモを追加"}
+              </button>
+            </div>
+            <div className="space-y-2 rounded-xl border border-zinc-100 bg-white px-3 py-3">
+              <div className="text-[11px] font-semibold text-zinc-500">最近のメモ</div>
+              {notesLoading && <div className="text-xs text-zinc-500">読み込み中...</div>}
+              {!notesLoading && notes.length === 0 && <div className="text-xs text-zinc-400">まだメモがありません</div>}
+              {!notesLoading &&
+                notes.map((n) => (
+                  <div key={n.id} className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs">
+                    <div className="mb-1 text-[11px] text-zinc-500">
+                      {new Date(n.createdAt).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                    <div className="whitespace-pre-wrap text-zinc-800">{n.content}</div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
