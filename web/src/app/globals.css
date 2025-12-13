@@ -24,3 +24,26 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+  /* 画面専用の要素を非表示 */
+  .screen-only {
+    display: none !important;
+  }
+  /* 印刷ページ分割用 */
+  .print-page {
+    page-break-after: always;
+  }
+  .print-page:last-of-type {
+    page-break-after: auto;
+  }
+  body {
+    margin: 0;
+    background: white;
+    font-family: Arial, "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  }
+}
